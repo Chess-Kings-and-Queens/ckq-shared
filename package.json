@@ -1,0 +1,39 @@
+{
+  "name": "@ckq/shared",
+  "version": "0.1.0",
+  "description": "Shared pure TypeScript logic and API contract types for the CKQ platform, consumed by website2.0 and ckq-mobile. No React/DOM/React Native imports allowed.",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "jest",
+    "lint": "eslint . --ext .ts",
+    "prepare": "npm run build"
+  },
+  "dependencies": {
+    "@mliebelt/pgn-reader": "^1.2.30",
+    "chess.js": "^1.4.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20",
+    "@typescript-eslint/eslint-plugin": "7.18.0",
+    "@typescript-eslint/parser": "7.18.0",
+    "eslint": "^8",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "tsup": "^8.0.2",
+    "typescript": "^5"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Chess-Kings-and-Queens/ckq-shared.git"
+  }
+}

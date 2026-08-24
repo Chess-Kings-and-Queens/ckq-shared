@@ -1,0 +1,64 @@
+{
+  "root": true,
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "sourceType": "module",
+    "ecmaVersion": 2020
+  },
+  "plugins": ["@typescript-eslint"],
+  "extends": [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/recommended"
+  ],
+  "env": {
+    "node": true,
+    "es2020": true
+  },
+  "ignorePatterns": ["dist/", "node_modules/", "*.js"],
+  "rules": {
+    "@typescript-eslint/no-explicit-any": "warn",
+    "@typescript-eslint/no-unused-vars": "warn",
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "react",
+            "message": "@ckq/shared is platform-agnostic pure logic + types — no React imports allowed (D4: consumed by both website2.0 and ckq-mobile)."
+          },
+          {
+            "name": "react-dom",
+            "message": "@ckq/shared is platform-agnostic pure logic + types — no DOM imports allowed (D4: consumed by both website2.0 and ckq-mobile)."
+          },
+          {
+            "name": "react-native",
+            "message": "@ckq/shared is platform-agnostic pure logic + types — no React Native imports allowed (D4: consumed by both website2.0 and ckq-mobile)."
+          }
+        ],
+        "patterns": [
+          {
+            "group": ["react/*", "react-dom/*", "react-native/*"],
+            "message": "@ckq/shared is platform-agnostic pure logic + types — no React/DOM/React Native imports allowed (D4: consumed by both website2.0 and ckq-mobile)."
+          }
+        ]
+      }
+    ],
+    "no-restricted-globals": [
+      "error",
+      {
+        "name": "document",
+        "message": "@ckq/shared has zero DOM dependencies (D4) — `document` is a browser-only global not available in ckq-mobile/React Native."
+      },
+      {
+        "name": "window",
+        "message": "@ckq/shared has zero DOM dependencies (D4) — `window` is a browser-only global not available in ckq-mobile/React Native."
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["src/__tests__/**/*.ts"],
+      "env": { "jest": true }
+    }
+  ]
+}
