@@ -11,6 +11,7 @@ export * from './gameOutcome';
 export * from './uciInfoParser';
 export * from './uciSession';
 export * from './missionSucceeded';
+export * from './homeworkSession';
 
 export * from './types/homework';
 export * from './types/missions';
