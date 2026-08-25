@@ -23,6 +23,11 @@ export interface UciSessionOptions {
   skillLevel?: number;
   /** Called with the SAN move once the engine responds to a search with `bestmove`. */
   onBestMove?: (san: string) => void;
+  /**
+   * True when the transport is already warm and has completed its own UCI
+   * handshake — e.g. a preloaded engine worker. Skips the handshake entirely.
+   */
+  startReady?: boolean;
 }
 
 interface PendingSearch {
@@ -68,7 +73,12 @@ export class UciSession {
     this.skillLevel = options.skillLevel ?? 20;
     this.onBestMoveCallback = options.onBestMove;
     this.unsubscribe = transport.onLine((line) => this.handleLine(line));
-    this.transport.send('uci');
+    if (options.startReady) {
+      this.transport.send(`setoption name Skill Level value ${this.skillLevel}`);
+      this.markReady();
+    } else {
+      this.transport.send('uci');
+    }
   }
 
   get isReady(): boolean {
@@ -100,6 +110,18 @@ export class UciSession {
     this.unsubscribe();
   }
 
+  /** Marks the session ready and fires (and clears) any queued search. */
+  private markReady(): void {
+    this.ready = true;
+    const pending = this.pendingSearch;
+    if (pending) {
+      this.pendingSearch = null;
+      this.thinking = true;
+      this.transport.send(`position fen ${pending.fen}`);
+      this.transport.send(`go movetime ${pending.movetime}`);
+    }
+  }
+
   private handleLine(line: string): void {
     if (line.startsWith('info') || line.startsWith('id')) return;
 
@@ -111,14 +133,7 @@ export class UciSession {
     }
 
     if (line === 'readyok') {
-      this.ready = true;
-      const pending = this.pendingSearch;
-      if (pending) {
-        this.pendingSearch = null;
-        this.thinking = true;
-        this.transport.send(`position fen ${pending.fen}`);
-        this.transport.send(`go movetime ${pending.movetime}`);
-      }
+      this.markReady();
       return;
     }
 

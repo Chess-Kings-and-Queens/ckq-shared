@@ -74,6 +74,24 @@ describe('UciSession — handshake', () => {
   });
 });
 
+describe('UciSession — startReady (preloaded/warm engine)', () => {
+  test('sends only setoption (no "uci") and is ready immediately', () => {
+    const fake = makeFakeTransport();
+    const session = new UciSession(fake.transport, { skillLevel: 12, startReady: true });
+    expect(fake.sent).toEqual(['setoption name Skill Level value 12']);
+    expect(session.isReady).toBe(true);
+  });
+
+  test('a search fired immediately after construction fires right away, with no wait', () => {
+    const fake = makeFakeTransport();
+    const session = new UciSession(fake.transport, { startReady: true });
+    fake.sent.length = 0;
+    session.fireSearch(START_FEN, 500);
+    expect(fake.sent).toEqual([`position fen ${START_FEN}`, 'go movetime 500']);
+    expect(session.isThinking).toBe(true);
+  });
+});
+
 describe('UciSession — fireSearch queueing', () => {
   test('a search fired before the handshake completes is queued, not sent immediately', () => {
     const fake = makeFakeTransport();
