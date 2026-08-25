@@ -12,6 +12,7 @@ export * from './uciInfoParser';
 export * from './uciSession';
 export * from './missionSucceeded';
 export * from './homeworkSession';
+export * from './puzzleAttemptReducer';
 
 export * from './types/homework';
 export * from './types/missions';
