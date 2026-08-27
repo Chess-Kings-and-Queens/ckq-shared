@@ -39,6 +39,17 @@ import { computeTimeTaken } from './homeworkSession';
 //   'resolved-correct'            — `quizDone && quizResult === 'correct'`.
 //                                    Always auto-advances; there is no retry
 //                                    concept for a correct answer.
+//   'resolved-incorrect-pending'  — `quizDone && quizResult === 'incorrect'`,
+//                                    but the retry-vs-final decision hasn't
+//                                    been made yet. Entered directly from
+//                                    'playing'/'brief-correct' the instant an
+//                                    incorrect outcome (move or timeout) is
+//                                    recorded; always resolved synchronously,
+//                                    in the same tick, by a follow-up
+//                                    `RETRY_DECISION` event — see "The
+//                                    `canRetry` external input" below for why
+//                                    this two-step split exists. Not meant to
+//                                    ever be visibly rendered by an adapter.
 //   'resolved-incorrect-retry'    — `quizDone && quizResult === 'incorrect'
 //                                    && autoRetrying === true`.
 //   'resolved-incorrect-final'    — `quizDone && quizResult === 'incorrect'
@@ -57,12 +68,21 @@ import { computeTimeTaken } from './homeworkSession';
 // entirely outside a single position's component — the parent homework page's
 // attempts-used/max-attempts bookkeeping (`@ckq/shared`'s
 // `hasAttemptsRemaining`, already extracted in Phase 3a — see
-// `homeworkSession.ts`). This reducer cannot and must not compute that fact
-// itself. Every event whose transition depends on it (`TICK`'s timeout branch,
-// `PLAYER_MOVE` with `result: 'incorrect'`) carries a `canRetry: boolean` field
-// that the caller supplies, having already called `hasAttemptsRemaining`
-// itself. This is the same category of "externally-supplied fact" as
-// `UciSession`'s `startReady` option (`uciSession.ts`).
+// `homeworkSession.ts`). Critically, that bookkeeping is itself mutated by the
+// `RECORD` effect below (the parent's DB-write callback increments the
+// attempts-used count and may cut `maxAttempts` for a rush-block) — so
+// `canRetry` can only be correctly computed AFTER `RECORD` has fired, not
+// before. This reducer cannot compute that fact itself, and an event carrying
+// `canRetry` up front (the original design) forces the caller to ask before
+// `RECORD` fires, which reads stale pre-attempt state — exactly the bug this
+// two-step split fixes. Instead: an incorrect outcome (`TICK` timeout,
+// `PLAYER_MOVE` with `result: 'incorrect'`) transitions straight to
+// `'resolved-incorrect-pending'` and emits `RECORD`; the retry fact is
+// supplied via a separate, follow-up `RETRY_DECISION` event that the adapter
+// dispatches only once its RECORD-triggered callback (and therefore the
+// bookkeeping mutation it performs) has returned. This is the same category
+// of "externally-supplied fact" as `UciSession`'s `startReady` option
+// (`uciSession.ts`) — just supplied one event later than before.
 //
 // ── Side effects this reducer never performs ─────────────────────────────────
 //
@@ -82,6 +102,7 @@ export type PuzzlePhase =
   | 'playing'
   | 'brief-correct'
   | 'resolved-correct'
+  | 'resolved-incorrect-pending'
   | 'resolved-incorrect-retry'
   | 'resolved-incorrect-final';
 
@@ -140,26 +161,27 @@ export function initPuzzleAttemptState(
 export type PuzzleAttemptEvent =
   /**
    * One countdown second has elapsed (the adapter's own 1000ms interval —
-   * `PuzzleBoard.tsx` lines 146-180). `canRetry` is only consulted if this
-   * tick crosses zero (a timeout); the adapter must still supply it on every
-   * tick since it cannot know in advance which tick that will be — same
-   * shape as `hasAttemptsRemaining` being an externally-supplied fact
-   * elsewhere in this event union.
+   * `PuzzleBoard.tsx` lines 146-180). No longer carries `canRetry` — a tick
+   * that crosses zero transitions straight to `'resolved-incorrect-pending'`
+   * and emits `RECORD`; the adapter follows up with a separate
+   * `RETRY_DECISION` event once it knows the post-record attempt count (see
+   * "The `canRetry` external input" above).
    */
-  | { type: 'TICK'; canRetry: boolean }
+  | { type: 'TICK' }
   /** The student's move resolved the puzzle correctly (final move of the
    *  sequence) — lines 210-240. */
   | { type: 'PLAYER_MOVE'; san: string; result: 'correct'; elapsedWallClockSeconds: number }
   /** The student's move resolved the puzzle incorrectly (either the final
    *  move was wrong, or any earlier move in the sequence was wrong) — lines
    *  241-257. `score` is the evaluator's own (opaque, time-decayed) score for
-   *  this outcome — forwarded verbatim, never computed here. */
+   *  this outcome — forwarded verbatim, never computed here. No longer
+   *  carries `canRetry` — see the `TICK` doc above; the same follow-up
+   *  `RETRY_DECISION` event applies here. */
   | {
       type: 'PLAYER_MOVE';
       san: string;
       result: 'incorrect';
       score: number;
-      canRetry: boolean;
       elapsedWallClockSeconds: number;
     }
   /** The student's move was correct so far but the sequence is not resolved
@@ -177,6 +199,16 @@ export type PuzzleAttemptEvent =
    * opponent's reply lands."
    */
   | { type: 'OPPONENT_REPLIED'; san: string }
+  /**
+   * Fired by the adapter immediately after processing the `RECORD` effect for
+   * an incorrect outcome (move or timeout) — `canRetry` reflects post-record
+   * attempt-count/maxAttempts state, since the caller's onShouldRetry-
+   * equivalent is only called AFTER the DB-write callback (the RECORD effect)
+   * has run. Only valid from `'resolved-incorrect-pending'`; a no-op from any
+   * other phase. See "The `canRetry` external input" above for the full
+   * rationale.
+   */
+  | { type: 'RETRY_DECISION'; canRetry: boolean }
   /**
    * Fired by the adapter ~1200ms after entering `'resolved-incorrect-retry'`
    * (the `doRetryResetRef` logic, lines 104-121). The adapter is responsible
@@ -252,11 +284,13 @@ export function reducePuzzleAttempt(
 ): PuzzleAttemptTransition {
   switch (event.type) {
     case 'TICK':
-      return handleTick(state, event);
+      return handleTick(state);
     case 'PLAYER_MOVE':
       return handlePlayerMove(state, event);
     case 'OPPONENT_REPLIED':
       return handleOpponentReplied(state, event);
+    case 'RETRY_DECISION':
+      return handleRetryDecision(state, event);
     case 'RETRY_RESET':
       return handleRetryReset(state);
     case 'CONTINUE':
@@ -265,10 +299,7 @@ export function reducePuzzleAttempt(
 }
 
 /** Item 1 — countdown tick, `PuzzleBoard.tsx` lines 146-180. */
-function handleTick(
-  state: PuzzleAttemptState,
-  event: Extract<PuzzleAttemptEvent, { type: 'TICK' }>,
-): PuzzleAttemptTransition {
+function handleTick(state: PuzzleAttemptState): PuzzleAttemptTransition {
   // Untimed puzzles never create the interval in the first place (the early
   // return at lines 137-144) — no-op mirrors that.
   if (state.timeLimit === null) return { state, effects: [] };
@@ -285,15 +316,14 @@ function handleTick(
     // Timeout (lines 152-174). timeTaken is `timeLimit` DIRECTLY here — NOT
     // `computeTimeTaken` — a deliberate asymmetry versus every move-based
     // resolution path below (line 160). Preserved exactly, not "fixed."
+    // The retry-vs-final decision is deferred to a follow-up RETRY_DECISION
+    // event (see "The `canRetry` external input" above) — this transition
+    // only records the outcome.
     const effects: PuzzleAttemptEffect[] = [
       { type: 'RECORD', result: 'incorrect', timeTaken: state.timeLimit, moves: state.moves, score: 0 },
       { type: 'NOTIFY_IN_PROGRESS', inProgress: false }, // line 166
     ];
-    const phase: PuzzlePhase = event.canRetry ? 'resolved-incorrect-retry' : 'resolved-incorrect-final';
-    if (event.canRetry) {
-      effects.push({ type: 'SCHEDULE', kind: 'retry-reset', delayMs: 1200 }); // lines 169-171
-    }
-    return { state: { ...state, phase, secondsLeft: 0 }, effects };
+    return { state: { ...state, phase: 'resolved-incorrect-pending', secondsLeft: 0 }, effects };
   }
 
   return { state: { ...state, secondsLeft: cur - 1 }, effects: [] };
@@ -329,17 +359,15 @@ function handlePlayerMove(
   }
 
   if (event.result === 'incorrect') {
-    // Item 3 — lines 241-257.
+    // Item 3 — lines 241-257. The retry-vs-final decision is deferred to a
+    // follow-up RETRY_DECISION event (see "The `canRetry` external input"
+    // above) — this transition only records the outcome.
     const timeTaken = computeTimeTaken(state.timeLimit, state.secondsLeft, event.elapsedWallClockSeconds);
-    const phase: PuzzlePhase = event.canRetry ? 'resolved-incorrect-retry' : 'resolved-incorrect-final';
     const effects: PuzzleAttemptEffect[] = [
       { type: 'NOTIFY_IN_PROGRESS', inProgress: false }, // line 215 — same shared branch as the correct path
       { type: 'RECORD', result: 'incorrect', timeTaken, moves, score: event.score }, // line 247 — opaque evaluator score
     ];
-    if (event.canRetry) {
-      effects.push({ type: 'SCHEDULE', kind: 'retry-reset', delayMs: 1200 }); // lines 251-256
-    }
-    return { state: { ...state, phase, moves }, effects };
+    return { state: { ...state, phase: 'resolved-incorrect-pending', moves }, effects };
   }
 
   // event.result === 'pending'
@@ -378,6 +406,25 @@ function handleOpponentReplied(
     state: { ...state, phase: 'playing', moves: [...state.moves, event.san] },
     effects: [],
   };
+}
+
+/**
+ * Not one of the transition table's 7 numbered items — resolves the
+ * retry-vs-final decision that `handleTick`/`handlePlayerMove`'s incorrect
+ * branches defer (see "The `canRetry` external input" above). Only valid
+ * from `'resolved-incorrect-pending'`; a no-op from any other phase (e.g. a
+ * stray/duplicate dispatch).
+ */
+function handleRetryDecision(
+  state: PuzzleAttemptState,
+  event: Extract<PuzzleAttemptEvent, { type: 'RETRY_DECISION' }>,
+): PuzzleAttemptTransition {
+  if (state.phase !== 'resolved-incorrect-pending') return { state, effects: [] };
+  const phase: PuzzlePhase = event.canRetry ? 'resolved-incorrect-retry' : 'resolved-incorrect-final';
+  const effects: PuzzleAttemptEffect[] = event.canRetry
+    ? [{ type: 'SCHEDULE', kind: 'retry-reset', delayMs: 1200 }]
+    : [];
+  return { state: { ...state, phase }, effects };
 }
 
 /** Item 6 — the retry-reset logic, `PuzzleBoard.tsx` lines 104-121. */

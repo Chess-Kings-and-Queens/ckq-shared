@@ -1,6 +1,6 @@
 {
   "name": "@ckq/shared",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Shared pure TypeScript logic and API contract types for the CKQ platform, consumed by website2.0 and ckq-mobile. No React/DOM/React Native imports allowed.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",

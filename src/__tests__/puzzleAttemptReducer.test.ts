@@ -55,7 +55,7 @@ describe('initPuzzleAttemptState', () => {
 describe('item 1 — countdown tick', () => {
   test('a normal tick decrements secondsLeft by 1 and emits no effects', () => {
     const state = playingState({ secondsLeft: 10 });
-    const { state: next, effects } = reducePuzzleAttempt(state, { type: 'TICK', canRetry: true });
+    const { state: next, effects } = reducePuzzleAttempt(state, { type: 'TICK' });
     expect(next.secondsLeft).toBe(9);
     expect(next.phase).toBe('playing');
     expect(effects).toEqual([]);
@@ -63,59 +63,45 @@ describe('item 1 — countdown tick', () => {
 
   test('ticking during brief-correct still decrements (interval keeps running mid-sequence)', () => {
     const state = playingState({ phase: 'brief-correct', secondsLeft: 50 });
-    const { state: next, effects } = reducePuzzleAttempt(state, { type: 'TICK', canRetry: true });
+    const { state: next, effects } = reducePuzzleAttempt(state, { type: 'TICK' });
     expect(next.secondsLeft).toBe(49);
     expect(next.phase).toBe('brief-correct');
     expect(effects).toEqual([]);
   });
 
-  test('untimed puzzle (timeLimit null): TICK is a no-op regardless of canRetry', () => {
+  test('untimed puzzle (timeLimit null): TICK is a no-op', () => {
     const state = playingState({ secondsLeft: null, timeLimit: null });
-    const { state: next, effects } = reducePuzzleAttempt(state, { type: 'TICK', canRetry: true });
+    const { state: next, effects } = reducePuzzleAttempt(state, { type: 'TICK' });
     expect(next).toEqual(state);
     expect(effects).toEqual([]);
   });
 
   test('a tick after resolution (already done) is a no-op', () => {
     const state = playingState({ phase: 'resolved-correct', secondsLeft: 30 });
-    const { state: next, effects } = reducePuzzleAttempt(state, { type: 'TICK', canRetry: true });
+    const { state: next, effects } = reducePuzzleAttempt(state, { type: 'TICK' });
     expect(next).toEqual(state);
     expect(effects).toEqual([]);
   });
 
-  describe('timeout (secondsLeft crossing zero) — canRetry: true', () => {
-    test('secondsLeft === 1 ticking down triggers timeout, resolves incorrect-retry, schedules a retry-reset', () => {
+  describe('timeout (secondsLeft crossing zero)', () => {
+    test('secondsLeft === 1 ticking down triggers timeout, resolves incorrect-pending, records, does NOT yet schedule a retry-reset', () => {
       const state = playingState({ secondsLeft: 1, moves: ['e4', 'e5'] });
-      const { state: next, effects } = reducePuzzleAttempt(state, { type: 'TICK', canRetry: true });
+      const { state: next, effects } = reducePuzzleAttempt(state, { type: 'TICK' });
 
-      expect(next.phase).toBe('resolved-incorrect-retry');
+      expect(next.phase).toBe('resolved-incorrect-pending');
       expect(next.secondsLeft).toBe(0);
 
       expect(effects).toEqual([
         { type: 'RECORD', result: 'incorrect', timeTaken: 180, moves: ['e4', 'e5'], score: 0 },
         { type: 'NOTIFY_IN_PROGRESS', inProgress: false },
-        { type: 'SCHEDULE', kind: 'retry-reset', delayMs: 1200 },
       ]);
+      expect(effects.some((e) => e.type === 'SCHEDULE')).toBe(false);
     });
 
     test('secondsLeft === 0 (already at floor) also triggers timeout — cur <= 1 guard', () => {
       const state = playingState({ secondsLeft: 0 });
-      const { state: next } = reducePuzzleAttempt(state, { type: 'TICK', canRetry: true });
-      expect(next.phase).toBe('resolved-incorrect-retry');
-    });
-  });
-
-  describe('timeout — canRetry: false', () => {
-    test('resolves to incorrect-final and does NOT schedule a retry-reset', () => {
-      const state = playingState({ secondsLeft: 1, moves: ['e4'] });
-      const { state: next, effects } = reducePuzzleAttempt(state, { type: 'TICK', canRetry: false });
-
-      expect(next.phase).toBe('resolved-incorrect-final');
-      expect(effects).toEqual([
-        { type: 'RECORD', result: 'incorrect', timeTaken: 180, moves: ['e4'], score: 0 },
-        { type: 'NOTIFY_IN_PROGRESS', inProgress: false },
-      ]);
-      expect(effects.some((e) => e.type === 'SCHEDULE')).toBe(false);
+      const { state: next } = reducePuzzleAttempt(state, { type: 'TICK' });
+      expect(next.phase).toBe('resolved-incorrect-pending');
     });
   });
 
@@ -128,7 +114,7 @@ describe('item 1 — countdown tick', () => {
     // the literal timeLimit value from state, independent of whatever secondsLeft was at the
     // instant of crossing, to prove the reducer is not calling computeTimeTaken at all here.
     const state = playingState({ timeLimit: 300, secondsLeft: 1, moves: [] });
-    const { effects } = reducePuzzleAttempt(state, { type: 'TICK', canRetry: false });
+    const { effects } = reducePuzzleAttempt(state, { type: 'TICK' });
     const record = effects.find((e) => e.type === 'RECORD');
     expect(record).toMatchObject({ timeTaken: 300 });
   });
@@ -196,39 +182,19 @@ describe('item 2 — player move: sequence-final and correct', () => {
 // ── Item 3: player move, sequence-final and incorrect ────────────────────────
 
 describe('item 3 — player move: sequence-final and incorrect', () => {
-  test('canRetry true: resolves to resolved-incorrect-retry and schedules a retry-reset', () => {
+  test('resolves to resolved-incorrect-pending, records, does NOT yet schedule a retry-reset', () => {
     const state = playingState({ secondsLeft: 100, moves: ['e4'] });
     const { state: next, effects } = reducePuzzleAttempt(state, {
       type: 'PLAYER_MOVE',
       san: 'Nf6',
       result: 'incorrect',
       score: 37,
-      canRetry: true,
       elapsedWallClockSeconds: 0,
     });
 
-    expect(next.phase).toBe('resolved-incorrect-retry');
+    expect(next.phase).toBe('resolved-incorrect-pending');
     expect(next.moves).toEqual(['e4', 'Nf6']);
     // computeTimeTaken(180, 100, 0) = 80
-    expect(effects).toEqual([
-      { type: 'NOTIFY_IN_PROGRESS', inProgress: false },
-      { type: 'RECORD', result: 'incorrect', timeTaken: 80, moves: ['e4', 'Nf6'], score: 37 },
-      { type: 'SCHEDULE', kind: 'retry-reset', delayMs: 1200 },
-    ]);
-  });
-
-  test('canRetry false: resolves to resolved-incorrect-final and does NOT schedule a retry-reset', () => {
-    const state = playingState({ secondsLeft: 100, moves: ['e4'] });
-    const { state: next, effects } = reducePuzzleAttempt(state, {
-      type: 'PLAYER_MOVE',
-      san: 'Nf6',
-      result: 'incorrect',
-      score: 37,
-      canRetry: false,
-      elapsedWallClockSeconds: 0,
-    });
-
-    expect(next.phase).toBe('resolved-incorrect-final');
     expect(effects).toEqual([
       { type: 'NOTIFY_IN_PROGRESS', inProgress: false },
       { type: 'RECORD', result: 'incorrect', timeTaken: 80, moves: ['e4', 'Nf6'], score: 37 },
@@ -243,11 +209,125 @@ describe('item 3 — player move: sequence-final and incorrect', () => {
       san: 'Nf6',
       result: 'incorrect',
       score: 12.5,
-      canRetry: true,
       elapsedWallClockSeconds: 0,
     });
     const record = effects.find((e) => e.type === 'RECORD');
     expect(record).toMatchObject({ score: 12.5 });
+  });
+});
+
+// ── RETRY_DECISION — resolves the deferred retry-vs-final choice ────────────
+
+describe('RETRY_DECISION', () => {
+  function pendingState(overrides: Partial<PuzzleAttemptState> = {}): PuzzleAttemptState {
+    return playingState({ phase: 'resolved-incorrect-pending', ...overrides });
+  }
+
+  test('canRetry true: resolves to resolved-incorrect-retry and schedules a retry-reset', () => {
+    const state = pendingState({ moves: ['e4', 'Nf6'] });
+    const { state: next, effects } = reducePuzzleAttempt(state, { type: 'RETRY_DECISION', canRetry: true });
+
+    expect(next.phase).toBe('resolved-incorrect-retry');
+    expect(next.moves).toEqual(['e4', 'Nf6']);
+    expect(effects).toEqual([{ type: 'SCHEDULE', kind: 'retry-reset', delayMs: 1200 }]);
+  });
+
+  test('canRetry false: resolves to resolved-incorrect-final and emits no effects', () => {
+    const state = pendingState();
+    const { state: next, effects } = reducePuzzleAttempt(state, { type: 'RETRY_DECISION', canRetry: false });
+
+    expect(next.phase).toBe('resolved-incorrect-final');
+    expect(effects).toEqual([]);
+  });
+
+  test('is a no-op when not currently in resolved-incorrect-pending', () => {
+    const state = playingState({ phase: 'playing' });
+    const { state: next, effects } = reducePuzzleAttempt(state, { type: 'RETRY_DECISION', canRetry: true });
+    expect(next).toEqual(state);
+    expect(effects).toEqual([]);
+  });
+
+  describe('end-to-end sequencing — matches what the old single-event API produced in one step', () => {
+    test('TICK timeout, then RETRY_DECISION(true): same final phase/effects as the old canRetry:true TICK', () => {
+      const state = playingState({ secondsLeft: 1, moves: ['e4', 'e5'] });
+      const { state: afterTick, effects: tickEffects } = reducePuzzleAttempt(state, { type: 'TICK' });
+      expect(afterTick.phase).toBe('resolved-incorrect-pending');
+
+      const { state: final, effects: decisionEffects } = reducePuzzleAttempt(afterTick, {
+        type: 'RETRY_DECISION',
+        canRetry: true,
+      });
+
+      expect(final.phase).toBe('resolved-incorrect-retry');
+      expect([...tickEffects, ...decisionEffects]).toEqual([
+        { type: 'RECORD', result: 'incorrect', timeTaken: 180, moves: ['e4', 'e5'], score: 0 },
+        { type: 'NOTIFY_IN_PROGRESS', inProgress: false },
+        { type: 'SCHEDULE', kind: 'retry-reset', delayMs: 1200 },
+      ]);
+    });
+
+    test('TICK timeout, then RETRY_DECISION(false): same final phase/effects as the old canRetry:false TICK', () => {
+      const state = playingState({ secondsLeft: 1, moves: ['e4'] });
+      const { state: afterTick, effects: tickEffects } = reducePuzzleAttempt(state, { type: 'TICK' });
+
+      const { state: final, effects: decisionEffects } = reducePuzzleAttempt(afterTick, {
+        type: 'RETRY_DECISION',
+        canRetry: false,
+      });
+
+      expect(final.phase).toBe('resolved-incorrect-final');
+      expect([...tickEffects, ...decisionEffects]).toEqual([
+        { type: 'RECORD', result: 'incorrect', timeTaken: 180, moves: ['e4'], score: 0 },
+        { type: 'NOTIFY_IN_PROGRESS', inProgress: false },
+      ]);
+    });
+
+    test('PLAYER_MOVE incorrect, then RETRY_DECISION(true): same final phase/effects as the old canRetry:true PLAYER_MOVE', () => {
+      const state = playingState({ secondsLeft: 100, moves: ['e4'] });
+      const { state: afterMove, effects: moveEffects } = reducePuzzleAttempt(state, {
+        type: 'PLAYER_MOVE',
+        san: 'Nf6',
+        result: 'incorrect',
+        score: 37,
+        elapsedWallClockSeconds: 0,
+      });
+      expect(afterMove.phase).toBe('resolved-incorrect-pending');
+
+      const { state: final, effects: decisionEffects } = reducePuzzleAttempt(afterMove, {
+        type: 'RETRY_DECISION',
+        canRetry: true,
+      });
+
+      expect(final.phase).toBe('resolved-incorrect-retry');
+      expect(final.moves).toEqual(['e4', 'Nf6']);
+      expect([...moveEffects, ...decisionEffects]).toEqual([
+        { type: 'NOTIFY_IN_PROGRESS', inProgress: false },
+        { type: 'RECORD', result: 'incorrect', timeTaken: 80, moves: ['e4', 'Nf6'], score: 37 },
+        { type: 'SCHEDULE', kind: 'retry-reset', delayMs: 1200 },
+      ]);
+    });
+
+    test('PLAYER_MOVE incorrect, then RETRY_DECISION(false): same final phase/effects as the old canRetry:false PLAYER_MOVE', () => {
+      const state = playingState({ secondsLeft: 100, moves: ['e4'] });
+      const { state: afterMove, effects: moveEffects } = reducePuzzleAttempt(state, {
+        type: 'PLAYER_MOVE',
+        san: 'Nf6',
+        result: 'incorrect',
+        score: 37,
+        elapsedWallClockSeconds: 0,
+      });
+
+      const { state: final, effects: decisionEffects } = reducePuzzleAttempt(afterMove, {
+        type: 'RETRY_DECISION',
+        canRetry: false,
+      });
+
+      expect(final.phase).toBe('resolved-incorrect-final');
+      expect([...moveEffects, ...decisionEffects]).toEqual([
+        { type: 'NOTIFY_IN_PROGRESS', inProgress: false },
+        { type: 'RECORD', result: 'incorrect', timeTaken: 80, moves: ['e4', 'Nf6'], score: 37 },
+      ]);
+    });
   });
 });
 
@@ -259,10 +339,7 @@ describe('timeout-vs-computeTimeTaken timeTaken asymmetry', () => {
     const secondsLeftAtDone = 45; // same "seconds left" in both scenarios
 
     const timeoutState = playingState({ timeLimit, secondsLeft: 1 });
-    const { effects: timeoutEffects } = reducePuzzleAttempt(timeoutState, {
-      type: 'TICK',
-      canRetry: false,
-    });
+    const { effects: timeoutEffects } = reducePuzzleAttempt(timeoutState, { type: 'TICK' });
     const timeoutRecord = timeoutEffects.find((e) => e.type === 'RECORD');
     // Timeout always reports the full timeLimit as timeTaken, regardless of
     // secondsLeft at the moment of crossing (PuzzleBoard.tsx line 160).
@@ -274,7 +351,6 @@ describe('timeout-vs-computeTimeTaken timeTaken asymmetry', () => {
       san: 'Nf6',
       result: 'incorrect',
       score: 0,
-      canRetry: false,
       elapsedWallClockSeconds: 0,
     });
     const moveRecord = moveEffects.find((e) => e.type === 'RECORD');
@@ -433,11 +509,17 @@ describe('item 6 — retry reset', () => {
     const resumed = initPuzzleAttemptState(180, 45);
     const { state: afterTimeout } = reducePuzzleAttempt(
       { ...resumed, secondsLeft: 1 },
-      { type: 'TICK', canRetry: true },
+      { type: 'TICK' },
     );
-    expect(afterTimeout.phase).toBe('resolved-incorrect-retry');
+    expect(afterTimeout.phase).toBe('resolved-incorrect-pending');
 
-    const { state: afterReset } = reducePuzzleAttempt(afterTimeout, { type: 'RETRY_RESET' });
+    const { state: afterDecision } = reducePuzzleAttempt(afterTimeout, {
+      type: 'RETRY_DECISION',
+      canRetry: true,
+    });
+    expect(afterDecision.phase).toBe('resolved-incorrect-retry');
+
+    const { state: afterReset } = reducePuzzleAttempt(afterDecision, { type: 'RETRY_RESET' });
     // Must be the full 180, never 45.
     expect(afterReset.secondsLeft).toBe(180);
   });

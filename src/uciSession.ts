@@ -28,6 +28,16 @@ export interface UciSessionOptions {
    * handshake — e.g. a preloaded engine worker. Skips the handshake entirely.
    */
   startReady?: boolean;
+  /**
+   * Called every time `isThinking`'s value changes — both when a search
+   * actually starts (immediately if ready, or once a queued search fires on
+   * `readyok`) and when it ends (every `bestmove` line, regardless of
+   * whether it parses to a legal SAN). Lets a caller mirror this session's
+   * internal `thinking` flag exactly instead of approximating it from
+   * `onBestMove` alone, which never fires on a `bestmove (none)` or a failed
+   * UCI→SAN conversion.
+   */
+  onThinkingChange?: (thinking: boolean) => void;
 }
 
 interface PendingSearch {
@@ -54,6 +64,7 @@ export class UciSession {
   private readonly transport: UciTransport;
   private readonly skillLevel: number;
   private readonly onBestMoveCallback: ((san: string) => void) | undefined;
+  private readonly onThinkingChangeCallback: ((thinking: boolean) => void) | undefined;
   private readonly unsubscribe: () => void;
 
   private ready = false;
@@ -72,6 +83,7 @@ export class UciSession {
     this.transport = transport;
     this.skillLevel = options.skillLevel ?? 20;
     this.onBestMoveCallback = options.onBestMove;
+    this.onThinkingChangeCallback = options.onThinkingChange;
     this.unsubscribe = transport.onLine((line) => this.handleLine(line));
     if (options.startReady) {
       this.transport.send(`setoption name Skill Level value ${this.skillLevel}`);
@@ -97,7 +109,7 @@ export class UciSession {
   fireSearch(fen: string, movetime: number): void {
     this.lastSearchFen = fen;
     if (this.ready) {
-      this.thinking = true;
+      this.setThinking(true);
       this.transport.send(`position fen ${fen}`);
       this.transport.send(`go movetime ${movetime}`);
     } else {
@@ -116,10 +128,16 @@ export class UciSession {
     const pending = this.pendingSearch;
     if (pending) {
       this.pendingSearch = null;
-      this.thinking = true;
+      this.setThinking(true);
       this.transport.send(`position fen ${pending.fen}`);
       this.transport.send(`go movetime ${pending.movetime}`);
     }
+  }
+
+  /** Sets `thinking` and notifies `onThinkingChange` — the single place both mutate together. */
+  private setThinking(value: boolean): void {
+    this.thinking = value;
+    this.onThinkingChangeCallback?.(value);
   }
 
   private handleLine(line: string): void {
@@ -138,7 +156,7 @@ export class UciSession {
     }
 
     if (line.startsWith('bestmove')) {
-      this.thinking = false;
+      this.setThinking(false);
       const uci = line.split(' ')[1];
       if (!uci || uci === '(none)') return;
       const san = uciMoveToSan(this.lastSearchFen, uci);

@@ -182,6 +182,68 @@ describe('UciSession — bestmove', () => {
   });
 });
 
+describe('UciSession — onThinkingChange', () => {
+  test('fires true the moment a search actually fires when already ready, false on bestmove', () => {
+    const onThinkingChange = jest.fn();
+    const fake = makeFakeTransport();
+    const session = new UciSession(fake.transport, { startReady: true, onThinkingChange });
+
+    session.fireSearch(START_FEN, 500);
+    expect(onThinkingChange).toHaveBeenLastCalledWith(true);
+    expect(session.isThinking).toBe(true);
+
+    fake.emit('bestmove e2e4');
+    expect(onThinkingChange).toHaveBeenLastCalledWith(false);
+    expect(session.isThinking).toBe(false);
+  });
+
+  test('does NOT fire true merely because a search was queued before the handshake completed — only once it actually fires on readyok', () => {
+    const onThinkingChange = jest.fn();
+    const fake = makeFakeTransport();
+    const session = new UciSession(fake.transport, { onThinkingChange });
+
+    session.fireSearch(START_FEN, 500);
+    expect(onThinkingChange).not.toHaveBeenCalled();
+    expect(session.isThinking).toBe(false);
+
+    fake.emit('uciok');
+    fake.emit('readyok');
+    expect(onThinkingChange).toHaveBeenCalledWith(true);
+    expect(session.isThinking).toBe(true);
+  });
+
+  test('fires false on "bestmove (none)" even though onBestMove never fires', () => {
+    const onBestMove = jest.fn();
+    const onThinkingChange = jest.fn();
+    const fake = makeFakeTransport();
+    const session = new UciSession(fake.transport, { startReady: true, onBestMove, onThinkingChange });
+
+    session.fireSearch(START_FEN, 500);
+    fake.emit('bestmove (none)');
+
+    expect(onBestMove).not.toHaveBeenCalled();
+    expect(onThinkingChange).toHaveBeenLastCalledWith(false);
+    expect(session.isThinking).toBe(false);
+  });
+
+  test('fires false on a bestmove UCI string that fails SAN conversion (illegal for the searched FEN) even though onBestMove never fires', () => {
+    const onBestMove = jest.fn();
+    const onThinkingChange = jest.fn();
+    const fake = makeFakeTransport();
+    const session = new UciSession(fake.transport, { startReady: true, onBestMove, onThinkingChange });
+
+    // e2e5 is illegal from the start position (a pawn cannot move 3 squares) —
+    // uciMoveToSan fails to convert it, so onBestMove must not fire, but the
+    // session must still leave the "thinking" state.
+    session.fireSearch(START_FEN, 500);
+    fake.emit('bestmove e2e5');
+
+    expect(onBestMove).not.toHaveBeenCalled();
+    expect(onThinkingChange).toHaveBeenLastCalledWith(false);
+    expect(session.isThinking).toBe(false);
+  });
+});
+
 describe('UciSession — destroy', () => {
   test('unsubscribes from the transport', () => {
     const fake = makeFakeTransport();
