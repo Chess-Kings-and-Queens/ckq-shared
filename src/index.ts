@@ -7,6 +7,7 @@ export * from './chessUtils';
 export * from './homeworkUtils';
 export * from './decodeJwt';
 export * from './moveTree';
+export * from './boardEditor';
 export * from './gameOutcome';
 export * from './uciInfoParser';
 export * from './uciSession';
