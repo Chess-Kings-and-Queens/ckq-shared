@@ -1,4 +1,5 @@
-import { QuizEvaluator, MoveResult } from '../quizEvaluator';
+import { QuizEvaluator, MoveResult, gradePositionAttempt } from '../quizEvaluator';
+import { gradePositionAttempt as gradePositionAttemptFromBarrel } from '../index';
 import { buildQuizPgn, START_FEN } from '../chessUtils';
 import { PgnReader, PgnReaderMove } from '@mliebelt/pgn-reader';
 
@@ -225,5 +226,162 @@ describe('buildQuizPgn → QuizEvaluator integration', () => {
     expect(result.result).toBe(MoveResult.Pending);
     // Evaluator should provide Nf3 for opponent auto-play
     expect(result.nextMove?.notation.notation).toBe('Nf3');
+  });
+});
+
+// ─── evaluate — correctPlayerMoves (additive field) ──────────────────────────
+
+describe('QuizEvaluator.evaluate — correctPlayerMoves', () => {
+  const pgn = '1. e4 e5 2. Nf3 Nc6 3. Bb5 a6';
+  const sans = ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5', 'a6'];
+  const wrap = (q: QuizEvaluator, list: string[]) =>
+    list.map((san, i) => syntheticMove(san, q.quizMoves[i].turn));
+
+  test('Correct: counts every player move', () => {
+    const q = new QuizEvaluator(pgn, 100);
+    expect(q.evaluate(wrap(q, sans)).correctPlayerMoves).toBe(3);
+  });
+
+  test('Incorrect at player move 2: counts 1', () => {
+    const q = new QuizEvaluator(pgn, 100);
+    expect(q.evaluate(wrap(q, ['e4', 'e5', 'd4'])).correctPlayerMoves).toBe(1);
+  });
+
+  test('Incorrect at player move 1: counts 0', () => {
+    const q = new QuizEvaluator(pgn, 100);
+    expect(q.evaluate(wrap(q, ['d4'])).correctPlayerMoves).toBe(0);
+  });
+
+  test('Pending (correct prefix): counts matched player moves', () => {
+    const q = new QuizEvaluator(pgn, 100);
+    const result = q.evaluate(wrap(q, ['e4']));
+    expect(result.result).toBe(MoveResult.Pending);
+    expect(result.correctPlayerMoves).toBe(1);
+  });
+
+  test('Pending (no moves): 0', () => {
+    const q = new QuizEvaluator(pgn, 100);
+    expect(q.evaluate([]).correctPlayerMoves).toBe(0);
+  });
+
+  test('Terminated (empty PGN): 0', () => {
+    const q = new QuizEvaluator('*', 100);
+    expect(q.evaluate(makeMoves(TWO_MOVE_PGN, 1)).correctPlayerMoves).toBe(0);
+  });
+});
+
+// ─── gradePositionAttempt ─────────────────────────────────────────────────────
+
+describe('gradePositionAttempt', () => {
+  const VARIATION_PGN =
+    '[FEN "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4"]\n[SetUp "1"]\n\n4. Qxf7# (4. Bxf7+ Ke7 5. Qxe5+) 1-0';
+  const THREE_MOVE_PGN = '1. e4 e5 2. Nf3 Nc6 3. Bb5 a6';
+  const THREE_MOVE_SANS = ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5', 'a6'];
+
+  test('barrel export resolves', () => {
+    expect(typeof gradePositionAttemptFromBarrel).toBe('function');
+    expect(gradePositionAttemptFromBarrel).toBe(gradePositionAttempt);
+  });
+
+  test('single-move puzzle, correct SAN', () => {
+    expect(gradePositionAttempt(ONE_MOVE_PGN, ['e4'])).toMatchObject({
+      isCorrect: true,
+      score: 100,
+      result: MoveResult.Correct,
+    });
+  });
+
+  test('single-move puzzle, wrong SAN', () => {
+    expect(gradePositionAttempt(ONE_MOVE_PGN, ['d4'])).toMatchObject({
+      isCorrect: false,
+      score: 0,
+      result: MoveResult.Incorrect,
+    });
+  });
+
+  test('variation: main line is correct, the variation move is Incorrect', () => {
+    expect(gradePositionAttempt(VARIATION_PGN, ['Qxf7#'])).toMatchObject({
+      isCorrect: true,
+      score: 100,
+      result: MoveResult.Correct,
+    });
+    expect(gradePositionAttempt(VARIATION_PGN, ['Bxf7+'])).toMatchObject({
+      isCorrect: false,
+      result: MoveResult.Incorrect,
+    });
+  });
+
+  test('three-player-move line: all correct is 100', () => {
+    const g = gradePositionAttempt(THREE_MOVE_PGN, THREE_MOVE_SANS);
+    expect(g.isCorrect).toBe(true);
+    expect(g.score).toBe(100);
+    expect(g.correctPlayerMoves).toBe(3);
+  });
+
+  test('three-player-move line: wrong at player move 2 gives partial credit', () => {
+    const g = gradePositionAttempt(THREE_MOVE_PGN, ['e4', 'e5', 'd4']);
+    expect(g.isCorrect).toBe(false);
+    expect(g.result).toBe(MoveResult.Incorrect);
+    expect(g.score).toBeCloseTo(33.33, 1);
+    expect(g.correctPlayerMoves).toBe(1);
+  });
+
+  test('three-player-move line: wrong at player move 1 scores 0', () => {
+    const g = gradePositionAttempt(THREE_MOVE_PGN, ['d4']);
+    expect(g.isCorrect).toBe(false);
+    expect(g.score).toBe(0);
+    expect(g.correctPlayerMoves).toBe(0);
+  });
+
+  test('correct prefix only (timeout) is Pending, 0, one player move matched', () => {
+    const g = gradePositionAttempt(THREE_MOVE_PGN, ['e4', 'e5']);
+    expect(g).toMatchObject({ isCorrect: false, score: 0, result: MoveResult.Pending, correctPlayerMoves: 1 });
+  });
+
+  test('no moves is Pending, 0, zero player moves', () => {
+    expect(gradePositionAttempt(THREE_MOVE_PGN, [])).toMatchObject({
+      isCorrect: false,
+      score: 0,
+      result: MoveResult.Pending,
+      correctPlayerMoves: 0,
+    });
+  });
+
+  test('empty-movetext PGN is Terminated, 0, zero player moves', () => {
+    expect(gradePositionAttempt('*', ['e4'])).toMatchObject({
+      isCorrect: false,
+      score: 0,
+      result: MoveResult.Terminated,
+      correctPlayerMoves: 0,
+    });
+  });
+
+  test('moves after the end of the solution line are ignored', () => {
+    const g = gradePositionAttempt(TWO_MOVE_PGN, ['e4', 'e5', 'Nf3', 'Nc6']);
+    expect(g.result).toBe(MoveResult.Correct);
+    expect(g.isCorrect).toBe(true);
+  });
+
+  describe('parity with stepping QuizEvaluator.evaluate move by move', () => {
+    const cases: Array<[string, string[]]> = [
+      [THREE_MOVE_PGN, THREE_MOVE_SANS],
+      [THREE_MOVE_PGN, ['e4', 'e5', 'd4']],
+      [THREE_MOVE_PGN, ['e4', 'e5']],
+      [VARIATION_PGN, ['Bxf7+']],
+    ];
+    test.each(cases)('pgn %#', (pgn, sans) => {
+      const q = new QuizEvaluator(pgn, 100);
+      let last = q.evaluate([]);
+      const played: PgnReaderMove[] = [];
+      for (let i = 0; i < sans.length; i++) {
+        played.push(syntheticMove(sans[i], q.quizMoves[i].turn));
+        last = q.evaluate([...played]);
+        if (last.result === MoveResult.Incorrect) break;
+      }
+      const g = gradePositionAttempt(pgn, sans);
+      expect(g.result).toBe(last.result);
+      expect(g.score).toBe(last.result === MoveResult.Correct || last.result === MoveResult.Incorrect ? last.score : 0);
+      expect(g.correctPlayerMoves).toBe(last.correctPlayerMoves);
+    });
   });
 });
