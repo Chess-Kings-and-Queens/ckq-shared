@@ -192,8 +192,10 @@ export interface SubmitHomeworkMoveInput {
   materialId: string;
   positionIndex: number;
   moves: string[];
-  isCorrect: boolean;
-  score: number;
+  /** @deprecated Ignored by the backend, which grades the moves itself (ADR backend-024). Omit it. */
+  isCorrect?: boolean;
+  /** @deprecated Ignored by the backend, which grades the moves itself (ADR backend-024). Omit it. */
+  score?: number;
   timeTaken?: number;
 }
 
