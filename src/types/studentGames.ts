@@ -72,6 +72,8 @@ export interface GameTimelineRow {
   event: string | null;
   practice: boolean | null;
   link: { type: 'library' | 'tournament-watch' | 'mission-watch'; ref: string } | null;
+  /** Online tournament id for the results endpoints (GET /online-tournament/results/:id/...); null for library and mission rows. */
+  tournamentId: string | null;
 }
 
 export interface GameTimelineResult {
