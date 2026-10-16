@@ -18,6 +18,8 @@ export interface TrainingConfig {
   autoAssign: boolean;
   orientation: 'white' | 'black';
   stockfishLevel: number;
+  /** Curriculum bucket (Level Up Score / missions filter). null on missions created before the backfill. */
+  category?: 'endgame' | 'conversion' | null;
   successCriteria: SuccessCriteria;
 }
 
