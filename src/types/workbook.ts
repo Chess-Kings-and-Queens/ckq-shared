@@ -9,6 +9,8 @@ export interface WorkbookChapterSummary {
   title: string;
   totalPositions: number;
   completed: number;
+  /** Backend-computed rounded completion percentage (workbook.service.js getWorkbookSummary). */
+  pct: number;
   hasImage: boolean;
   hasPdf: boolean;
   imageKey: string | null;
@@ -26,7 +28,7 @@ export interface MyWorkbookSummary {
   exists: boolean;
   owned: boolean;
   workbook: { id: string; title: string; chapters: WorkbookChapterSummary[]; totalPositions: number } | null;
-  progress: { completed: number; total: number; scoreAvg: number | null } | null;
+  progress: { completed: number; total: number; scoreAvg: number | null; allComplete: boolean } | null;
   products: WorkbookProductOption[];
 }
 

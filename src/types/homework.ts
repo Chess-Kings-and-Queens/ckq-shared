@@ -26,18 +26,8 @@ interface HomeworkPositionReport {
 interface HomeworkReportMaterialCollectionRef {
   _id?: string;
   title?: string;
-  /**
-   * MISMATCH (flagged, not fixed): getReport() in homework.service.js populates
-   * materialCollection with `.populate('materialCollection', 'title')` — ONLY
-   * `title` is ever selected. `maxAttempts` is never present on this object in a
-   * real API response, even though the student homework-report page reads
-   * `report.homework.materialCollection.maxAttempts ?? 3` (HomeworkDetailPage
-   * page.tsx `onReportLoad`) — meaning that read always falls through to the `3`
-   * default in production regardless of the collection's real maxAttempts.
-   * Modeled optional so it type-checks either way; not fixed here (test-typing
-   * only, no runtime changes).
-   */
-  maxAttempts?: number;
+  /** Max attempts per position — populated by `GET /homework/report` since backend #1104. */
+  maxAttempts: number;
 }
 
 export interface HomeworkReport {
@@ -228,6 +218,8 @@ export interface HomeworkRow {
   timeSpent?: number;
   status: HomeworkStatus;
   createdAt: string;
+  /** Backend-marked "do this next" row (homework.service.js getProgress): the newest in-progress, else the newest not-started. */
+  isNext?: boolean;
 }
 
 export interface ProgressReportResponse {

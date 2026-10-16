@@ -75,6 +75,16 @@ export interface MissionAttempt {
   updatedAt: string;
 }
 
+/** Why a mission game ended, as sent to POST /missions/attempts/:id/complete (the backend grades it). */
+export type MissionCompleteReason = 'board' | 'resign' | 'timeout' | 'opponent_timeout';
+
+export interface CompleteAttemptInput {
+  reason: MissionCompleteReason;
+  pgn: string;
+}
+
+export type CompleteAttemptResult = MissionAttempt & { outcome: 'win' | 'loss' | 'draw' | null };
+
 export interface ListMissionsResult {
   missions: Mission[];
   total: number;
