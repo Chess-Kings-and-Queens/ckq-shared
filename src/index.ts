@@ -12,6 +12,8 @@ export * from './gameOutcome';
 export * from './uciInfoParser';
 export * from './uciSession';
 export * from './missionSucceeded';
+export * from './missionClock';
+export * from './missionReplay';
 export * from './homeworkSession';
 export * from './puzzleAttemptReducer';
 
@@ -22,7 +24,6 @@ export * from './types/workbook';
 export * from './tokens';
 export * from './statusDisplay';
 export * from './apiErrors';
-export * from './missionCompleteReason';
 export * from './levelMetricDisplay';
 export * from './tournamentResultLabels';
 

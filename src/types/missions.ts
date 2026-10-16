@@ -75,15 +75,73 @@ export interface MissionAttempt {
   updatedAt: string;
 }
 
-/** Why a mission game ended, as sent to POST /missions/attempts/:id/complete (the backend grades it). */
-export type MissionCompleteReason = 'board' | 'resign' | 'timeout' | 'opponent_timeout';
+// ── Server-owned game contract (append-validated missions) ───────────────────
+//
+// Every move (the student's and the engine's) is appended to the server in
+// order; the server validates it against its own board, holds the move list and
+// decides the result. See docs/plans/server-owned-play-plan.md D2/D3/D6/D15.
 
-export interface CompleteAttemptInput {
-  reason: MissionCompleteReason;
-  pgn: string;
+/** Whose move it is, or who made a move: the student or the engine. */
+export type MissionTurn = 'player' | 'engine';
+
+/** One accepted move as stored by the server. `at` is the server's ISO timestamp. */
+export interface MissionMove {
+  ply: number;
+  san: string;
+  uci: string;
+  by: MissionTurn;
+  at: string;
 }
 
-export type CompleteAttemptResult = MissionAttempt & { outcome: 'win' | 'loss' | 'draw' | null };
+/** Body of POST /training-positions/attempts/:attemptId/moves. */
+export interface MissionMoveInput {
+  ply: number;
+  san: string;
+  by: MissionTurn;
+}
+
+/** Body of POST /training-positions/attempts/:attemptId/end. Resign is the only client-initiated end. */
+export interface MissionEndInput {
+  reason: 'resign';
+}
+
+export type MissionResultReason =
+  | 'checkmate'
+  | 'stalemate'
+  | 'threefold'
+  | 'insufficient'
+  | 'fifty-move'
+  | 'timeout'
+  | 'forfeit'
+  | 'resign';
+
+/** The server-decided result, from the student's point of view. */
+export interface MissionResult {
+  outcome: 'win' | 'loss' | 'draw';
+  reason: MissionResultReason;
+}
+
+/** Server-held clock. Durations are milliseconds; timestamps are ISO strings. */
+export interface MissionClock {
+  playerMs: number;
+  engineMs: number;
+  incrementMs: number;
+  /** When the side to move started its turn; null when no turn is running (game over). */
+  turnStartedAt: string | null;
+  serverNow: string;
+}
+
+export interface MissionGameState {
+  attemptId: string;
+  status: 'in_progress' | 'succeeded' | 'failed';
+  startFen: string;
+  fen: string;
+  moves: MissionMove[];
+  turn: MissionTurn;
+  playerColor: 'white' | 'black';
+  clock: MissionClock;
+  result: MissionResult | null;
+}
 
 export interface ListMissionsResult {
   missions: Mission[];

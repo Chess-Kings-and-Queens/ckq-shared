@@ -186,12 +186,23 @@ export interface SubmitHomeworkMoveInput {
   isCorrect?: boolean;
   /** @deprecated Ignored by the backend, which grades the moves itself (ADR backend-024). Omit it. */
   score?: number;
-  timeTaken?: number;
+}
+
+/** Body of PUT /homework-result/:id/open and /workbook-result/:id/open: the server stamps the position start. */
+export interface OpenPositionInput {
+  materialId: string;
+  positionIndex: number;
+}
+
+export interface OpenPositionResult {
+  timeLimit: number;
+  secondsRemaining: number;
+  serverNow: string;
+  attemptNumber: number;
 }
 
 export interface PauseHomeworkTimerInput {
   materialId: string;
-  additionalSeconds: number;
 }
 
 // Authoritative homework status vocabulary — mirrors the HomeworkResult enum
