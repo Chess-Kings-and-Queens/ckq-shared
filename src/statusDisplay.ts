@@ -2,7 +2,7 @@ import { tokens } from './tokens';
 import type { HomeworkReport, HomeworkStatus } from './types/homework';
 import type { Mission } from './types/missions';
 import type { GameTimelineRow } from './types/studentGames';
-import type { JoinState } from './types/tournamentResults';
+import type { JoinState, RoundStatus } from './types/tournamentResults';
 
 // ── Status → label + tone ──────────────────────────────────────────────────────
 //
@@ -71,4 +71,10 @@ export const joinStateDisplay: Record<JoinState, StatusDisplay> = {
   in_round: { label: '● In round', tone: 'orange' },
   between_rounds: { label: '● Between rounds', tone: 'orange' },
   done: { label: 'Finished', tone: 'neutral' },
+};
+
+export const roundStatusDisplay: Record<RoundStatus, StatusDisplay> = {
+  played: { label: 'Played', tone: 'success' },
+  in_progress: { label: 'In progress', tone: 'orange' },
+  upcoming: { label: 'Upcoming', tone: 'neutral' },
 };

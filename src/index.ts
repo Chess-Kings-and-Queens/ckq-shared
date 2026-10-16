@@ -24,6 +24,7 @@ export * from './statusDisplay';
 export * from './apiErrors';
 export * from './missionCompleteReason';
 export * from './levelMetricDisplay';
+export * from './tournamentResultLabels';
 
 export * from './types/student';
 export * from './types/workLog';

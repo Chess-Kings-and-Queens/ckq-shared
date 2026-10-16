@@ -4,6 +4,7 @@ import {
   joinStateDisplay,
   missionStatusDisplay,
   positionStatusDisplay,
+  roundStatusDisplay,
   toneColors,
 } from '../statusDisplay';
 import type { Tone } from '../statusDisplay';
@@ -67,5 +68,12 @@ describe('toneColors', () => {
     for (const tone of Object.keys(expected) as Tone[]) {
       expect(toneColors(tone)).toEqual(expected[tone]);
     }
+  });
+  it('roundStatusDisplay maps every RoundStatus', () => {
+    expect(roundStatusDisplay).toEqual({
+      played: { label: 'Played', tone: 'success' },
+      in_progress: { label: 'In progress', tone: 'orange' },
+      upcoming: { label: 'Upcoming', tone: 'neutral' },
+    });
   });
 });
