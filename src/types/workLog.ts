@@ -33,6 +33,10 @@ export interface WorkLogAggregate {
   totalHours: number;
   perActivity: Record<string, number>;
   streak: number;
+  /** ISO start of the window the server used (the ET ISO week when no dates are sent, backend-2.0 workLog.service). */
+  weekStart: string;
+  /** ISO end of that window. Clients filter entries and label the week from these, never computing bounds. */
+  weekEnd: string;
 }
 
 export interface WeeklyHistoryItem {
