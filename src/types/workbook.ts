@@ -75,5 +75,4 @@ export interface SubmitWorkbookMoveInput {
   isCorrect?: boolean;
   /** @deprecated Ignored by the backend, which grades the moves itself (ADR backend-024). Omit it. */
   score?: number;
-  timeTaken?: number;
 }
