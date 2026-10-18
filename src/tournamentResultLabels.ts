@@ -49,6 +49,11 @@ export function resultReasonLabel(reason: string | null): string {
     'draw-50move': '50-move rule',
     'draw-agreed': 'Draw agreed',
     aborted: 'Aborted',
+    // Legacy engine-bye games stored the live `GameResultReason` names.
+    stalemate: 'Stalemate',
+    threefold: 'Repetition',
+    insufficient: 'Insufficient material',
+    'fifty-move': '50-move rule',
   };
   return reason ? map[reason] ?? reason : '—';
 }

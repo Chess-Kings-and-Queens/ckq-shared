@@ -1,54 +1,67 @@
-import { Chess } from 'chess.js';
-import { detectOutcome, collectPgn, buildUci, resumeReplay } from '../gameOutcome';
+import { ChessGame } from '../chessGame';
+import { detectOutcome, collectPgn, buildUci, resumeReplay, toTournamentReason } from '../gameOutcome';
+import { START_FEN } from '../chessUtils';
 import { createRoot, type MoveNode } from '../moveTree';
+
+const gameFrom = (fen: string | undefined, sans: string[] = []): ChessGame => {
+  const g = ChessGame.fromFen(fen);
+  if (!g) throw new Error(`bad fixture FEN: ${fen}`);
+  for (const san of sans) {
+    if (!g.play(san).ok) throw new Error(`illegal fixture move: ${san}`);
+  }
+  return g;
+};
 
 describe('detectOutcome', () => {
   test('returns null while the game is still in progress', () => {
-    const chess = new Chess();
-    chess.move('e4');
-    expect(detectOutcome(chess)).toBeNull();
+    expect(detectOutcome(gameFrom(undefined, ['e4']))).toBeNull();
   });
 
   test("detects checkmate — Fool's mate", () => {
-    const chess = new Chess();
-    for (const san of ['f3', 'e5', 'g4', 'Qh4#']) chess.move(san);
-    expect(detectOutcome(chess)).toEqual({ reason: 'checkmate', winner: 'black' });
+    const game = gameFrom(undefined, ['f3', 'e5', 'g4', 'Qh4#']);
+    expect(detectOutcome(game)).toEqual({ reason: 'checkmate', winner: 'black' });
   });
 
   test('checkmate winner is white when black is mated', () => {
     // Scholar's mate
-    const chess = new Chess();
-    for (const san of ['e4', 'e5', 'Bc4', 'Nc6', 'Qh5', 'Nf6??', 'Qxf7#']) {
-      // chess.js doesn't accept "??" annotations — strip them
-      chess.move(san.replace(/[?!]+$/, ''));
-    }
-    expect(detectOutcome(chess)).toEqual({ reason: 'checkmate', winner: 'white' });
+    const game = gameFrom(undefined, ['e4', 'e5', 'Bc4', 'Nc6', 'Qh5', 'Nf6', 'Qxf7#']);
+    expect(detectOutcome(game)).toEqual({ reason: 'checkmate', winner: 'white' });
   });
 
   test('detects stalemate', () => {
     // A well-known stalemate position (black to move, no legal moves, not in check).
-    const chess = new Chess('7k/5K2/6Q1/8/8/8/8/8 b - - 0 1');
-    expect(detectOutcome(chess)).toEqual({ reason: 'stalemate', winner: null });
+    expect(detectOutcome(gameFrom('7k/5K2/6Q1/8/8/8/8/8 b - - 0 1'))).toEqual({ reason: 'stalemate', winner: null });
   });
 
   test('detects insufficient material (king vs king)', () => {
-    const chess = new Chess('8/8/8/4k3/8/8/8/4K3 w - - 0 1');
-    expect(detectOutcome(chess)).toEqual({ reason: 'insufficient', winner: null });
+    expect(detectOutcome(gameFrom('8/8/8/4k3/8/8/8/4K3 w - - 0 1'))).toEqual({ reason: 'insufficient', winner: null });
   });
 
-  test('detects threefold repetition via a persistent Chess instance', () => {
+  test('detects threefold repetition via a persistent ChessGame', () => {
     // K on a1, k on h8, locked pawns so insufficient material never triggers.
-    const chess = new Chess('7k/7p/8/8/8/8/7P/K7 w - - 0 1');
-    const moves = ['Kb1', 'Kg8', 'Ka1', 'Kh8', 'Kb1', 'Kg8', 'Ka1', 'Kh8'];
-    for (const san of moves) chess.move(san);
-    expect(detectOutcome(chess)).toEqual({ reason: 'threefold', winner: null });
+    const game = gameFrom('7k/7p/8/8/8/8/7P/K7 w - - 0 1', ['Kb1', 'Kg8', 'Ka1', 'Kh8', 'Kb1', 'Kg8', 'Ka1', 'Kh8']);
+    expect(detectOutcome(game)).toEqual({ reason: 'threefold', winner: null });
   });
 
-  test('a fresh Chess(fen) instance never reports threefold — history must be persistent', () => {
-    // Same final position as the threefold test above, but built from a fresh
-    // instance with no move history — must NOT report threefold.
-    const chess = new Chess('7k/7p/8/8/8/8/7P/K7 w - - 8 5');
-    expect(chess.isThreefoldRepetition()).toBe(false);
+  test('a ChessGame built from a bare FEN never reports threefold — history must be persistent', () => {
+    // Same final position as the threefold test above, but with no move history.
+    expect(detectOutcome(gameFrom('7k/7p/8/8/8/8/7P/K7 w - - 8 5'))).toBeNull();
+  });
+});
+
+describe('toTournamentReason', () => {
+  test.each([
+    ['stalemate', 'draw-stalemate'],
+    ['threefold', 'draw-repetition'],
+    ['insufficient', 'draw-insufficient'],
+    ['fifty-move', 'draw-50move'],
+    ['agreement', 'draw-agreed'],
+  ] as const)('maps %s to %s', (live, stored) => {
+    expect(toTournamentReason(live)).toBe(stored);
+  });
+
+  test.each(['checkmate', 'resign', 'timeout', 'forfeit', 'aborted'] as const)('passes %s through', (reason) => {
+    expect(toTournamentReason(reason)).toBe(reason);
   });
 });
 
@@ -92,20 +105,17 @@ describe('buildUci', () => {
 
 describe('resumeReplay', () => {
   test('resumes with an even-length history from the standard start FEN — player to move next', () => {
-    const START_FEN = new Chess().fen();
     const result = resumeReplay(START_FEN, ['e4', 'e5'], 'white');
     expect(result.appliedSans).toEqual(['e4', 'e5']);
     expect(result.isOpponentTurnNext).toBe(false);
   });
 
   test('resumes with an odd-length history — opponent to move next', () => {
-    const START_FEN = new Chess().fen();
     const result = resumeReplay(START_FEN, ['e4'], 'white');
     expect(result.isOpponentTurnNext).toBe(true);
   });
 
   test('stops the replay at the first illegal SAN rather than throwing', () => {
-    const START_FEN = new Chess().fen();
     const result = resumeReplay(START_FEN, ['e4', 'e5', 'Nz9', 'Nc6'], 'white');
     expect(result.appliedSans).toEqual(['e4', 'e5']);
     expect(result.isOpponentTurnNext).toBe(false);
@@ -113,18 +123,17 @@ describe('resumeReplay', () => {
   });
 
   test('a history ending in checkmate resumes directly into a resolved gameResult', () => {
-    const START_FEN = new Chess().fen();
     const result = resumeReplay(START_FEN, ['f3', 'e5', 'g4', 'Qh4#'], 'white');
     expect(result.gameResult).toEqual({ reason: 'checkmate', winner: 'black' });
     expect(result.isOpponentTurnNext).toBe(false);
   });
 
-  test('returns a chess instance with accumulated history usable for further threefold detection', () => {
+  test('returns a game with accumulated history usable for further threefold detection', () => {
     const startFen = '7k/7p/8/8/8/8/7P/K7 w - - 0 1';
     const result = resumeReplay(startFen, ['Kb1', 'Kg8', 'Ka1', 'Kh8', 'Kb1', 'Kg8'], 'white');
     // Continue the same repetition pattern to reach the third occurrence on the returned instance.
-    result.chess.move('Ka1');
-    result.chess.move('Kh8');
-    expect(detectOutcome(result.chess)).toEqual({ reason: 'threefold', winner: null });
+    result.game.play('Ka1');
+    result.game.play('Kh8');
+    expect(detectOutcome(result.game)).toEqual({ reason: 'threefold', winner: null });
   });
 });

@@ -1,4 +1,5 @@
-import { Chess, validateFen } from 'chess.js';
+import { ChessGame, isLegalFenSyntax, isSquareAttacked } from './chessGame';
+import { START_FEN } from './chessUtils';
 
 export const START_PLACEMENT = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR';
 export const EMPTY_PLACEMENT = '8/8/8/8/8/8/8/8';
@@ -143,16 +144,56 @@ function reasonFor(message: string): string {
 
 /** chess.js validateFen, then the side-not-to-move-in-check rule (D5). */
 export function validatePosition(fen: string): PositionValidity {
-  const result = validateFen(fen);
-  if (!result.ok) return { ok: false, reason: reasonFor(result.error ?? '') };
-  const c = new Chess(fen);
-  const other = c.turn() === 'w' ? 'b' : 'w';
-  const [kingSq] = c.findPiece({ type: 'k', color: other });
-  if (kingSq && c.isAttacked(kingSq, c.turn())) {
+  const result = isLegalFenSyntax(fen);
+  if (!result.ok) return { ok: false, reason: reasonFor(result.error) };
+  const fields = fen.trim().split(/\s+/);
+  const toMove = fields[1] === 'b' ? 'black' : 'white';
+  const other = toMove === 'white' ? 'black' : 'white';
+  const pieces = placementToMap(fields[0]);
+  let kingSq: string | undefined;
+  if (pieces) {
+    const kingLetter = other === 'white' ? 'K' : 'k';
+    for (const [sq, letter] of pieces) {
+      if (letter === kingLetter) {
+        kingSq = sq;
+        break;
+      }
+    }
+  }
+  if (kingSq && isSquareAttacked(fen, kingSq, toMove)) {
     return {
       ok: false,
-      reason: other === 'w' ? "White is in check but it is Black's move" : "Black is in check but it is White's move",
+      reason: other === 'white' ? "White is in check but it is Black's move" : "Black is in check but it is White's move",
     };
   }
   return { ok: true };
+}
+
+export type StartPositionResult =
+  | { ok: true; fen: string | null }
+  | { ok: false; error: 'invalid' | 'game-over' };
+
+/**
+ * One validator for a coach- or admin-supplied tournament starting position
+ * (D7). A non-string or blank input is "no custom position" (`fen: null`).
+ * Otherwise: a position chess.js cannot load, or whose side not to move is in
+ * check, is `invalid`; a position that is already a finished game is
+ * `game-over`; else the canonical FEN. `startAs` chooses what the standard
+ * start position returns: `'fen'` keeps its FEN, `'null'` turns it into null.
+ */
+export function validateStartPosition(
+  raw: unknown,
+  opts: { startAs: 'fen' | 'null' },
+): StartPositionResult {
+  if (typeof raw !== 'string' || !raw.trim()) return { ok: true, fen: null };
+
+  const game = ChessGame.fromFen(raw.trim());
+  if (!game) return { ok: false, error: 'invalid' };
+
+  const fen = game.fen;
+  if (!validatePosition(fen).ok) return { ok: false, error: 'invalid' };
+  if (game.outcome() !== null) return { ok: false, error: 'game-over' };
+
+  if (opts.startAs === 'null' && fen === START_FEN) return { ok: true, fen: null };
+  return { ok: true, fen };
 }

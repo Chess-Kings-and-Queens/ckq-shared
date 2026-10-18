@@ -29,12 +29,8 @@ describe('uciToSan', () => {
     expect(uciToSan(fen, ['a7a8q'])).toEqual(['a8=Q']);
   });
 
-  test('returns an empty array when a later move in the sequence is illegal (chess.js throws, discarding partial progress)', () => {
-    // chess.js v1.x throws on an illegal .move() call rather than returning
-    // null — the outer try/catch swallows it, so this returns [] rather than
-    // the partial ['e4']. This is the exact (if surprising) verbatim behavior
-    // ported from useStockfishEngine.ts.
-    expect(uciToSan(START_FEN, ['e2e4', 'a1a2'])).toEqual([]);
+  test('returns the legal prefix when a later move in the sequence is illegal', () => {
+    expect(uciToSan(START_FEN, ['e2e4', 'a1a2'])).toEqual(['e4']);
   });
 
   test('returns an empty array for an invalid FEN', () => {

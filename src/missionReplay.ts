@@ -24,7 +24,7 @@ export type ValidateAppendResult =
  * The one legality / turn / ply check for an appended mission move, used by the
  * backend and the liveboard server so they cannot drift (ADR backend-024).
  *
- * Replays `startFen` + `moves` on one persistent `Chess` (full history, so
+ * Replays `startFen` + `moves` on one persistent `ChessGame` (full history, so
  * threefold repetition works), then checks, in order:
  *   1. `ply` against the stored move count (behind -> `ply-behind`, ahead -> `ply-gap`)
  *   2. `by` against the side to move, derived from the replayed position and `playerColor`
@@ -47,21 +47,17 @@ export function validateAppend(
   );
   if (replay.appliedSans.length !== moves.length) return { ok: false, error: 'illegal-move' };
 
-  const { chess } = replay;
-  const playerCode = playerColor === 'white' ? 'w' : 'b';
-  const expectedBy: MissionTurn = chess.turn() === playerCode ? 'player' : 'engine';
+  const { game } = replay;
+  const expectedBy: MissionTurn = game.turn === playerColor ? 'player' : 'engine';
   if (move.by !== expectedBy) return { ok: false, error: 'out-of-turn' };
 
-  try {
-    const played = chess.move(move.san);
-    return {
-      ok: true,
-      fen: chess.fen(),
-      uci: played.from + played.to + (played.promotion ?? ''),
-      san: played.san,
-      outcome: detectOutcome(chess),
-    };
-  } catch {
-    return { ok: false, error: 'illegal-move' };
-  }
+  const played = game.play(move.san);
+  if (!played.ok) return { ok: false, error: 'illegal-move' };
+  return {
+    ok: true,
+    fen: played.move.fenAfter,
+    uci: played.move.uci,
+    san: played.move.san,
+    outcome: detectOutcome(game),
+  };
 }

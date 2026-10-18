@@ -10,6 +10,7 @@ import {
   draftFromFen,
   draftToFen,
   validatePosition,
+  validateStartPosition,
 } from '../boardEditor';
 import * as shared from '../index';
 import { START_FEN } from '../chessUtils';
@@ -205,6 +206,60 @@ describe('validatePosition', () => {
 
   test('castling rights with no rook are ok', () => {
     expect(validatePosition('4k3/8/8/8/8/8/8/4K3 w KQkq - 0 1')).toEqual({ ok: true });
+  });
+});
+
+describe('validateStartPosition', () => {
+  const BLACK_TO_MOVE_FEN = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
+  const CHECKMATE_FEN = 'rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3';
+
+  test.each([undefined, null, '', '   ', 12345])('a blank or non-string input (%p) is no custom position', (raw) => {
+    expect(validateStartPosition(raw, { startAs: 'fen' })).toEqual({ ok: true, fen: null });
+    expect(validateStartPosition(raw, { startAs: 'null' })).toEqual({ ok: true, fen: null });
+  });
+
+  test('startAs decides what the standard start returns', () => {
+    expect(validateStartPosition(START_FEN, { startAs: 'fen' })).toEqual({ ok: true, fen: START_FEN });
+    expect(validateStartPosition(START_FEN, { startAs: 'null' })).toEqual({ ok: true, fen: null });
+  });
+
+  test('accepts a legal non-standard position under both modes', () => {
+    expect(validateStartPosition(BLACK_TO_MOVE_FEN, { startAs: 'fen' })).toEqual({ ok: true, fen: BLACK_TO_MOVE_FEN });
+    expect(validateStartPosition(BLACK_TO_MOVE_FEN, { startAs: 'null' })).toEqual({ ok: true, fen: BLACK_TO_MOVE_FEN });
+  });
+
+  test('trims surrounding whitespace and returns the canonical form', () => {
+    expect(validateStartPosition(`  ${BLACK_TO_MOVE_FEN}  `, { startAs: 'null' })).toEqual({
+      ok: true,
+      fen: BLACK_TO_MOVE_FEN,
+    });
+    expect(validateStartPosition('4k3/8/8/8/8/8/4P3/4K3 w - -', { startAs: 'fen' })).toEqual({
+      ok: true,
+      fen: '4k3/8/8/8/8/8/4P3/4K3 w - - 0 1',
+    });
+  });
+
+  test('a malformed FEN or one missing a king is invalid', () => {
+    expect(validateStartPosition('not-a-real-fen', { startAs: 'null' })).toEqual({ ok: false, error: 'invalid' });
+    expect(validateStartPosition('8/8/8/8/8/8/8/8 w - - 0 1', { startAs: 'null' })).toEqual({
+      ok: false,
+      error: 'invalid',
+    });
+  });
+
+  test('a position whose side not to move is in check is invalid', () => {
+    expect(validateStartPosition('4k2R/8/8/8/8/8/8/4K3 w - - 0 1', { startAs: 'fen' })).toEqual({
+      ok: false,
+      error: 'invalid',
+    });
+  });
+
+  test('an already finished position is game-over', () => {
+    expect(validateStartPosition(CHECKMATE_FEN, { startAs: 'null' })).toEqual({ ok: false, error: 'game-over' });
+    expect(validateStartPosition('7k/5K2/6Q1/8/8/8/8/8 b - - 0 1', { startAs: 'fen' })).toEqual({
+      ok: false,
+      error: 'game-over',
+    });
   });
 });
 

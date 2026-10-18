@@ -1,4 +1,4 @@
-import { Chess } from 'chess.js';
+import { ChessGame } from './chessGame';
 import { fenMoveContext } from './chessUtils';
 
 // ── UCI `info` line parsing ────────────────────────────────────────────────────
@@ -31,23 +31,24 @@ export function extractInt(line: string, keyword: string): number | null {
   return m ? parseInt(m[1], 10) : null;
 }
 
-/** Convert UCI moves to SAN starting from a given FEN. */
+/**
+ * Convert UCI moves to SAN starting from a given FEN. Returns the legal prefix:
+ * conversion stops at the first illegal move; an invalid FEN yields [].
+ */
 export function uciToSan(fen: string, uciMoves: string[]): string[] {
-  try {
-    const chess = new Chess(fen);
-    const sans: string[] = [];
-    for (const uci of uciMoves) {
-      const from      = uci.slice(0, 2);
-      const to        = uci.slice(2, 4);
-      const promotion = uci.length === 5 ? uci[4] : undefined;
-      const result    = chess.move({ from, to, promotion });
-      if (!result) break;
-      sans.push(result.san);
-    }
-    return sans;
-  } catch {
-    return [];
+  const game = ChessGame.fromFen(fen);
+  if (!game) return [];
+  const sans: string[] = [];
+  for (const uci of uciMoves) {
+    const result = game.play({
+      from: uci.slice(0, 2),
+      to: uci.slice(2, 4),
+      promotion: uci.length === 5 ? uci[4] : undefined,
+    });
+    if (!result.ok) break;
+    sans.push(result.move.san);
   }
+  return sans;
 }
 
 /** Format a Stockfish `info` line into a structured EngineLine. Returns null for non-`info` or unparsable lines. */
