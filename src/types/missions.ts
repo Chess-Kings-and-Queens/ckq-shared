@@ -1,3 +1,7 @@
+import type { LagQuota } from '../lagComp';
+
+export type { LagQuota };
+
 // ── Domain types ─────────────────────────────────────────────────────────────
 //
 // Extracted from website2.0's src/app/services/missions.ts. Pure API contract
@@ -91,6 +95,12 @@ export interface MissionMove {
   uci: string;
   by: MissionTurn;
   at: string;
+  /** Network lag the server measured for this move, ms (clock-lag-compensation plan D8). */
+  lagMs?: number;
+  /** Lag forgiven for this move, ms. */
+  compMs?: number;
+  /** The think time the client claimed for this move, ms. */
+  clientMoveTimeMs?: number;
 }
 
 /** Body of POST /training-positions/attempts/:attemptId/moves. */
@@ -98,6 +108,8 @@ export interface MissionMoveInput {
   ply: number;
   san: string;
   by: MissionTurn;
+  /** Milliseconds the client's own clock ran for this move; absent = no forgiveness. */
+  clientMoveTimeMs?: number;
 }
 
 /** Body of POST /training-positions/attempts/:attemptId/end. Resign is the only client-initiated end. */
@@ -129,6 +141,8 @@ export interface MissionClock {
   /** When the side to move started its turn; null when no turn is running (game over). */
   turnStartedAt: string | null;
   serverNow: string;
+  /** Lag quotas per side; for the debug overlay only, the display ignores it. */
+  lag?: { player: LagQuota; engine: LagQuota };
 }
 
 export interface MissionGameState {

@@ -15,6 +15,7 @@ export * from './uciInfoParser';
 export * from './uciSession';
 export * from './missionSucceeded';
 export * from './missionClock';
+export * from './lagComp';
 export * from './missionReplay';
 export * from './homeworkSession';
 export * from './puzzleAttemptReducer';

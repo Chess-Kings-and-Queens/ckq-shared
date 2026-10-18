@@ -1,3 +1,4 @@
+import { flaggedAt } from './lagComp';
 import type { MissionClock, MissionTurn } from './types/missions';
 
 /**
@@ -22,8 +23,21 @@ export function remainingMs(
   return Math.max(0, base - elapsed);
 }
 
-/** True when the side to move has no time left at `now` (the server's flag rule, shared for display). */
-export function isFlagged(clock: MissionClock, now: number, turn: MissionTurn): boolean {
+/**
+ * True when the side to move is out of time at `now`: the server's flag rule,
+ * shared for display. `graceMs` is the grace window after zero (Lichess
+ * `outOfTime` with grace, see lagComp.ts `flaggedAt`); the default 0 is the
+ * plain "no time left" rule.
+ */
+export function isFlagged(
+  clock: MissionClock,
+  now: number,
+  turn: MissionTurn,
+  graceMs = 0,
+): boolean {
   if (clock.turnStartedAt === null) return false;
-  return remainingMs(clock, turn, now, turn) <= 0;
+  const base = turn === 'player' ? clock.playerMs : clock.engineMs;
+  const startedAt = Date.parse(clock.turnStartedAt);
+  const elapsed = Number.isNaN(startedAt) ? 0 : Math.max(0, now - startedAt);
+  return flaggedAt(base, elapsed, graceMs);
 }
