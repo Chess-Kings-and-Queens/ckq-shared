@@ -1,4 +1,4 @@
-import { Chess } from 'chess.js';
+import { ChessGame } from './chessGame';
 import type { MoveNode } from './moveTree';
 
 // ── Game result ────────────────────────────────────────────────────────────────
@@ -24,24 +24,38 @@ export interface GameResult {
 }
 
 /**
- * Detects checkmate/threefold/insufficient-material/stalemate/fifty-move on a
- * `Chess` instance. Requires a **persistent** instance that has accumulated the
- * full move history — `new Chess(fen)` has no history, so threefold repetition
- * can never be detected from a fresh instance per call. Callers must keep
- * applying moves to the same `Chess` object across the whole game (this is
- * exactly what website2.0's usePlayBoard does via a ref).
+ * Detects checkmate/stalemate/insufficient-material/threefold/fifty-move on a
+ * `ChessGame`. Requires a **persistent** game that has accumulated the full
+ * move history — a game built from a bare FEN has no history, so threefold
+ * repetition can never be detected from it. Callers must keep playing moves on
+ * the same `ChessGame` across the whole game. Precedence is `ChessGame.outcome()`'s
+ * (checkmate, stalemate, insufficient, threefold, fifty-move).
  */
-export function detectOutcome(chess: Chess): GameResult | null {
-  if (!chess.isGameOver()) return null;
-  if (chess.isCheckmate()) {
-    // chess.turn() is the side that got checkmated (can't move)
-    const loser = chess.turn() === 'w' ? 'white' : 'black';
-    return { reason: 'checkmate', winner: loser === 'white' ? 'black' : 'white' };
+export function detectOutcome(game: ChessGame): GameResult | null {
+  return game.outcome();
+}
+
+// ── Stored tournament vocabulary ────────────────────────────────────────────────
+
+/** The result reasons stored on tournament games (DB, backend enum and labels speak this set). */
+export type TournamentResultReason =
+  | 'checkmate' | 'timeout' | 'resign' | 'forfeit' | 'aborted'
+  | 'draw-stalemate' | 'draw-repetition' | 'draw-insufficient' | 'draw-50move' | 'draw-agreed';
+
+/**
+ * Maps a live `GameResultReason` to the string stored on a tournament game.
+ * stalemate→draw-stalemate, threefold→draw-repetition, insufficient→draw-insufficient,
+ * fifty-move→draw-50move, agreement→draw-agreed; every other value passes through.
+ */
+export function toTournamentReason(reason: GameResultReason | 'forfeit' | 'aborted'): TournamentResultReason {
+  switch (reason) {
+    case 'stalemate': return 'draw-stalemate';
+    case 'threefold': return 'draw-repetition';
+    case 'insufficient': return 'draw-insufficient';
+    case 'fifty-move': return 'draw-50move';
+    case 'agreement': return 'draw-agreed';
+    default: return reason;
   }
-  if (chess.isThreefoldRepetition()) return { reason: 'threefold', winner: null };
-  if (chess.isInsufficientMaterial()) return { reason: 'insufficient', winner: null };
-  if (chess.isStalemate()) return { reason: 'stalemate', winner: null };
-  return { reason: 'fifty-move', winner: null };
 }
 
 /** Collect the main-line SAN history (space-separated) up to `currentNode`. */
@@ -67,12 +81,12 @@ export function buildUci(from: string, to: string, san: string): string {
 
 export interface ResumeReplayResult {
   /**
-   * The persistent `Chess` instance replayed with the successfully-applied
+   * The persistent `ChessGame` replayed with the successfully-applied
    * SANs. Callers must keep using this exact instance (not a fresh
-   * `new Chess(fen)`) for all subsequent moves in the game, so threefold
-   * repetition detection stays correct across the whole game.
+   * `ChessGame.fromFen(fen)`) for all subsequent moves in the game, so
+   * threefold repetition detection stays correct across the whole game.
    */
-  chess: Chess;
+  game: ChessGame;
   /** SANs from the input that were successfully applied, stopping at the first illegal move. */
   appliedSans: string[];
   /** Resulting FEN after replay. */
@@ -91,7 +105,7 @@ export interface ResumeReplayResult {
 /**
  * Rebuilds a game's position/history/turn/ended-state from a starting FEN and
  * a list of SANs — for reconnect/resume scenarios. Replays each SAN onto a
- * fresh persistent `Chess` instance (so threefold repetition works correctly
+ * fresh persistent `ChessGame` (so threefold repetition works correctly
  * going forward), stopping at the first illegal SAN rather than throwing.
  *
  * Ported from usePlayBoard.ts's `resumeGame` — the pure half. The React hook
@@ -103,26 +117,18 @@ export function resumeReplay(
   sans: string[],
   playerColor: 'white' | 'black',
 ): ResumeReplayResult {
-  const chess = new Chess(startFen);
-  const appliedSans: string[] = [];
-  for (const san of sans) {
-    try {
-      chess.move(san);
-      appliedSans.push(san);
-    } catch {
-      break; // stop at the first illegal move — defensive, mirrors buildPgn's replay pattern
-    }
-  }
+  const { game, applied } = ChessGame.replay(startFen, sans);
+  const appliedSans = sans.slice(0, applied);
 
-  const opponentColorCode = playerColor === 'white' ? 'b' : 'w';
-  const opponentTurnNow = chess.turn() === opponentColorCode;
+  const opponentColor = playerColor === 'white' ? 'black' : 'white';
+  const opponentTurnNow = game.turn === opponentColor;
 
-  const gameResult = detectOutcome(chess);
+  const gameResult = detectOutcome(game);
 
   return {
-    chess,
+    game,
     appliedSans,
-    fen: chess.fen(),
+    fen: game.fen,
     gameResult,
     isOpponentTurnNext: gameResult ? false : opponentTurnNow,
   };

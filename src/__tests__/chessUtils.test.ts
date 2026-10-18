@@ -1,23 +1,35 @@
-import { Chess } from 'chess.js';
-import { toColor, buildQuizPgn, formatMoveSequence, fenMoveContext, START_FEN } from '../chessUtils';
+import { ChessGame } from '../chessGame';
+import {
+  toColor,
+  buildQuizPgn,
+  formatMoveSequence,
+  fenMoveContext,
+  sanToUci,
+  engineMovesFirst,
+  START_FEN,
+} from '../chessUtils';
+
+const newGame = (fen?: string): ChessGame => {
+  const g = ChessGame.fromFen(fen);
+  if (!g) throw new Error('bad fixture FEN');
+  return g;
+};
 
 describe('START_FEN', () => {
   test('is the standard starting position', () => {
-    const chess = new Chess();
-    expect(START_FEN).toBe(chess.fen());
+    expect(START_FEN).toBe(newGame().fen);
   });
 });
 
 describe('toColor', () => {
   test('returns white at the start of the game', () => {
-    const chess = new Chess();
-    expect(toColor(chess)).toBe('white');
+    expect(toColor(newGame())).toBe('white');
   });
 
   test('returns black after white plays e4', () => {
-    const chess = new Chess();
-    chess.move('e4');
-    expect(toColor(chess)).toBe('black');
+    const game = newGame();
+    game.play('e4');
+    expect(toColor(game)).toBe('black');
   });
 });
 
@@ -179,14 +191,47 @@ describe('buildQuizPgn', () => {
 
   test('fullmove counter from FEN is used for move numbering', () => {
     // After 1.e4 e5 2.Nf3 Nc6 it's white's turn, fullmove = 3
-    const fenMove3 = new Chess(FEN_AFTER_E4_E5);
-    fenMove3.move('Nf3');
-    fenMove3.move('Nc6');
-    const fen3 = fenMove3.fen(); // fullmove = 2 (after Nc6, next is white's move 2 in this line)
+    const fenMove3 = newGame(FEN_AFTER_E4_E5);
+    fenMove3.play('Nf3');
+    fenMove3.play('Nc6');
+    const fen3 = fenMove3.fen; // fullmove = 2 (after Nc6, next is white's move 2 in this line)
     // Actually FEN_AFTER_E4_E5 has fullmove=2, after Nf3 Nc6 it becomes fullmove=3
     const pgn = buildQuizPgn(fen3, ['Bc4']);
     // Should use the correct move number from FEN, not hardcoded '1.'
     expect(pgn).toMatch(/\d+\. Bc4/);
     expect(pgn).not.toMatch(/^1\. Bc4/); // fullmove should be > 1
+  });
+});
+
+describe('sanToUci', () => {
+  test('converts a plain move', () => {
+    expect(sanToUci(START_FEN, 'e4')).toBe('e2e4');
+  });
+
+  test('includes the promotion letter', () => {
+    expect(sanToUci('8/P6k/8/8/8/8/8/4K3 w - - 0 1', 'a8=Q')).toBe('a7a8q');
+  });
+
+  test('returns null for an illegal move', () => {
+    expect(sanToUci(START_FEN, 'e5')).toBeNull();
+  });
+
+  test('returns null for an invalid FEN', () => {
+    expect(sanToUci('not-a-fen', 'e4')).toBeNull();
+  });
+});
+
+describe('engineMovesFirst', () => {
+  test('the engine moves first when the player is black from the start position', () => {
+    expect(engineMovesFirst(START_FEN, 'black')).toBe(true);
+  });
+
+  test('the player moves first when the player is white from the start position', () => {
+    expect(engineMovesFirst(START_FEN, 'white')).toBe(false);
+  });
+
+  test('a black-to-move position flips both answers', () => {
+    expect(engineMovesFirst(FEN_AFTER_E4, 'white')).toBe(true);
+    expect(engineMovesFirst(FEN_AFTER_E4, 'black')).toBe(false);
   });
 });

@@ -1,20 +1,12 @@
-import { Chess } from 'chess.js';
+import { ChessGame } from './chessGame';
 
 /**
  * Convert a single UCI move (e.g. "e2e4", "a7a8q") to SAN given the position FEN.
  * Returns null if the move is illegal or the FEN is invalid.
  */
 export function uciMoveToSan(fen: string, uci: string): string | null {
-  try {
-    const chess = new Chess(fen);
-    const from = uci.slice(0, 2);
-    const to = uci.slice(2, 4);
-    const promotion = uci[4] ?? undefined;
-    const move = chess.move({ from, to, promotion });
-    return move?.san ?? null;
-  } catch {
-    return null;
-  }
+  const result = ChessGame.fromFen(fen)?.play({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
+  return result?.ok ? result.move.san : null;
 }
 
 /**
@@ -24,12 +16,26 @@ export function uciMoveToSan(fen: string, uci: string): string | null {
  * SAN + resulting FEN (no from/to), e.g. mission:student-move.
  */
 export function sanToMove(fen: string, san: string): { from: string; to: string } | null {
-  try {
-    const move = new Chess(fen).move(san);
-    return move ? { from: move.from, to: move.to } : null;
-  } catch {
-    return null;
-  }
+  const result = ChessGame.fromFen(fen)?.play(san);
+  return result?.ok ? { from: result.move.from, to: result.move.to } : null;
+}
+
+/**
+ * Given a position FEN and a SAN move, returns the move as UCI ("e2e4",
+ * "a7a8q"). Returns null if the SAN is illegal there or the FEN is invalid.
+ */
+export function sanToUci(fen: string, san: string): string | null {
+  const result = ChessGame.fromFen(fen)?.play(san);
+  return result?.ok ? result.move.uci : null;
+}
+
+/**
+ * Whether the engine (the side opposite `playerColor`) moves first from `fen`.
+ * False when the FEN is invalid.
+ */
+export function engineMovesFirst(fen: string, playerColor: 'white' | 'black'): boolean {
+  const game = ChessGame.fromFen(fen);
+  return game !== null && game.turn !== playerColor;
 }
 
 /**
@@ -90,23 +96,12 @@ export const START_FEN =
   'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
 /**
- * Return the color whose turn it is ('white' | 'black') from a Chess.js instance.
+ * Return the color whose turn it is ('white' | 'black') from a ChessGame.
  */
-export function toColor(chess: Chess): 'white' | 'black' {
-  return chess.turn() === 'w' ? 'white' : 'black';
+export function toColor(game: ChessGame): 'white' | 'black' {
+  return game.turn;
 }
 
-/**
- * Build a PGN string from a starting FEN and a sequence of SAN moves.
- * Used by the coach liveboard page to encode the quiz answer sequence.
- * Invalid SANs are silently skipped (the sequence stops there).
- *
- * Generates correct PGN move notation regardless of starting color:
- *   - White-to-move start: "1. e4 e5 2. Nf3 *"
- *   - Black-to-move start: "1... e5 2. Nf3 Nc6 *"
- * This ensures @mliebelt/pgn-reader assigns the correct `turn` to the first
- * move, which is what QuizEvaluator uses to determine playerColor.
- */
 /**
  * Parse PGN header tags into a key-value record.
  * E.g. `[White "Kasparov"]` → `{ White: "Kasparov" }`.
@@ -207,39 +202,17 @@ export function formatMoveSequence(
   return parts.join(' ');
 }
 
+/**
+ * Build a PGN string from a starting FEN and a sequence of SAN moves.
+ * Used by the coach liveboard page to encode the quiz answer sequence.
+ * Invalid SANs are silently skipped (the sequence stops there).
+ *
+ * Generates correct PGN move notation regardless of starting color:
+ *   - White-to-move start: "1. e4 e5 2. Nf3 *"
+ *   - Black-to-move start: "1... e5 2. Nf3 Nc6 *"
+ * This ensures @mliebelt/pgn-reader assigns the correct `turn` to the first
+ * move, which is what QuizEvaluator uses to determine playerColor.
+ */
 export function buildQuizPgn(startFen: string, sans: string[]): string {
-  const chess = new Chess(startFen);
-  const moves: { san: string; color: 'w' | 'b' }[] = [];
-  for (const san of sans) {
-    try {
-      const m = chess.move(san);
-      moves.push({ san: m.san, color: m.color });
-    } catch { break; }
-  }
-  if (moves.length === 0) return '';
-
-  const fenTag =
-    startFen !== START_FEN
-      ? `[FEN "${startFen}"]\n[SetUp "1"]\n\n`
-      : '';
-
-  // Parse starting move number and active color from FEN
-  const fenParts = startFen.split(' ');
-  let moveNum = parseInt(fenParts[5] ?? '1', 10) || 1;
-  const startColor = fenParts[1] ?? 'w'; // 'w' or 'b'
-
-  let moveText = '';
-  moves.forEach((move, i) => {
-    if (move.color === 'w') {
-      moveText += `${moveNum}. `;
-    } else if (i === 0 && startColor === 'b') {
-      // First move is black's — use ellipsis notation so pgn-reader
-      // assigns turn='b' to the first move (sets correct playerColor).
-      moveText += `${moveNum}... `;
-    }
-    moveText += move.san + ' ';
-    if (move.color === 'b') moveNum++;
-  });
-
-  return `${fenTag}${moveText.trim()} *`;
+  return ChessGame.replay(startFen, sans).game.pgn();
 }

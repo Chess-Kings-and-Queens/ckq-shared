@@ -79,6 +79,13 @@ describe("result helpers", () => {
     expect(resultReasonLabel(null)).toBe("—");
   });
 
+  it("resultReasonLabel words the legacy engine-bye reason names", () => {
+    expect(resultReasonLabel("stalemate")).toBe("Stalemate");
+    expect(resultReasonLabel("threefold")).toBe("Repetition");
+    expect(resultReasonLabel("insufficient")).toBe("Insufficient material");
+    expect(resultReasonLabel("fifty-move")).toBe("50-move rule");
+  });
+
   it("resultSummary words a white win by resignation, a black win by checkmate, a draw and no result", () => {
     expect(resultSummary("1-0", "resign", "Ethan P.", "Mia K.")).toBe("Ethan P. won by resignation");
     expect(resultSummary("0-1", "checkmate", "Ethan P.", "Mia K.")).toBe("Mia K. won by checkmate");

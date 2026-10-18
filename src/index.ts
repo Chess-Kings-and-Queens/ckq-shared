@@ -3,6 +3,8 @@
 // (lint-enforced — see .eslintrc.json and scripts/check-no-dom-globals.js).
 
 export * from './quizEvaluator';
+export * from './chessGame';
+export * from './boardStatus';
 export * from './chessUtils';
 export * from './homeworkUtils';
 export * from './decodeJwt';
