@@ -74,4 +74,17 @@ describe('isFlagged', () => {
   test('never flagged when no turn is running', () => {
     expect(isFlagged(clock({ turnStartedAt: null }), T0 + 999_000, 'player')).toBe(false);
   });
+
+  test('with a grace window the flag falls only once remaining <= elapsed - grace', () => {
+    // remaining is 60_000 - elapsed; grace 1_500
+    expect(isFlagged(clock(), T0 + 60_000, 'player', 1_500)).toBe(false);
+    expect(isFlagged(clock(), T0 + 61_000, 'player', 1_500)).toBe(false); // remaining -1000
+    expect(isFlagged(clock(), T0 + 61_499, 'player', 1_500)).toBe(false);
+    expect(isFlagged(clock(), T0 + 61_500, 'player', 1_500)).toBe(true); // remaining -1500
+  });
+
+  test('graceMs 0 is the old rule', () => {
+    expect(isFlagged(clock(), T0 + 60_000, 'player', 0)).toBe(true);
+    expect(isFlagged(clock(), T0 + 59_999, 'player', 0)).toBe(false);
+  });
 });
