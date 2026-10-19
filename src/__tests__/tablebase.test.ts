@@ -97,6 +97,22 @@ describe('tablebaseEligibility', () => {
     expect(r.ok).toBe(true);
   });
 
+  test('(S0.1) impossible castling rights give no castling move and a castling-free game FEN', () => {
+    const r = tablebaseEligibility('4k3/8/8/8/8/8/8/4K3 w KQ - 0 1');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.game.legalMoves()).toHaveLength(5);
+      expect(r.game.legalMoves().some((m) => m.san.startsWith('O-O'))).toBe(false);
+      expect(r.game.fen.split(' ')[2]).toBe('-');
+    }
+  });
+
+  test('(S0.1) a position with impossible KQkq rights has 23 legal moves, not 24', () => {
+    const r = tablebaseEligibility('8/8/8/8/8/3k4/8/K1Q5 w KQkq - 4 9');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.game.legalMoves()).toHaveLength(23);
+  });
+
   test('ok returns a ChessGame and the piece count', () => {
     const r = tablebaseEligibility('8/8/8/8/8/3k4/8/K1Q5 w - - 0 1');
     expect(r.ok).toBe(true);
