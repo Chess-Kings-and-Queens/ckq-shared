@@ -265,3 +265,38 @@ describe('ChessGame.clone', () => {
     expect(g.ply).toBe(6);
   });
 });
+
+describe('ChessGame.legalMoves', () => {
+  const FOOLS_MATE = 'rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3';
+  const PROMO_ONLY = '8/4P1k1/8/8/8/8/8/6K1 w - - 0 1';
+
+  test('the start position has 20 moves with SAN and UCI', () => {
+    const moves = game().legalMoves();
+    expect(moves).toHaveLength(20);
+    expect(moves.find((m) => m.uci === 'e2e4')?.san).toBe('e4');
+    expect(moves.find((m) => m.uci === 'g1f3')?.san).toBe('Nf3');
+  });
+
+  test('lists one entry per promotion piece', () => {
+    const ucis = game(PROMO_ONLY).legalMoves().map((m) => m.uci);
+    expect(ucis).toEqual(expect.arrayContaining(['e7e8q', 'e7e8r', 'e7e8b', 'e7e8n']));
+    expect(ucis.filter((u) => u.startsWith('e7e8'))).toHaveLength(4);
+  });
+
+  test('a mated position returns no moves', () => {
+    expect(game(FOOLS_MATE).legalMoves()).toEqual([]);
+  });
+
+  test.each([START, AFTER_E4, PROMO_ONLY, PROMOTION_FEN])('every fenAfter equals peek().fenAfter and the count matches legalDests (%s)', (fen) => {
+    const g = game(fen);
+    const moves = g.legalMoves();
+    for (const m of moves) {
+      expect(g.peek(m.uci)?.fenAfter).toBe(m.fenAfter);
+    }
+    let destCount = 0;
+    for (const [from, dests] of g.legalDests()) {
+      for (const to of dests) destCount += g.needsPromotion(from, to) ? 4 : 1;
+    }
+    expect(moves).toHaveLength(destCount);
+  });
+});
