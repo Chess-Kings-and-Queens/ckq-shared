@@ -44,11 +44,16 @@ export type TablebaseEligibility =
 export function tablebaseEligibility(fen: string, maxPieces: number = SYZYGY_MAX_PIECES): TablebaseEligibility {
   const pieces = countPieces(fen);
   const legal = typeof fen === 'string' && fen.trim() !== '' && validatePosition(fen).ok;
-  const game = legal ? ChessGame.fromFen(fen) : null;
-  if (!game) return { ok: false, reason: 'invalid-fen', pieces };
+  const draft = legal ? draftFromFen(fen) : null;
+  if (!draft) return { ok: false, reason: 'invalid-fen', pieces };
   if (pieces > maxPieces) return { ok: false, reason: 'too-many-pieces', pieces };
-  const castling = draftFromFen(game.fen)?.castling ?? '-';
-  if (castling !== '-') return { ok: false, reason: 'castling-rights', pieces };
+  if (draft.castling !== '-') return { ok: false, reason: 'castling-rights', pieces };
+  // The game is the position the tables answer: no castling rights. chess.js keeps
+  // impossible rights and generates castling moves for them, so they are dropped here (D22).
+  const fields = fen.trim().split(/\s+/);
+  fields[2] = '-';
+  const game = ChessGame.fromFen(fields.join(' '));
+  if (!game) return { ok: false, reason: 'invalid-fen', pieces };
   return { ok: true, game, pieces };
 }
 
