@@ -111,6 +111,17 @@ export function chargeMove(args: {
 }
 
 /**
+ * Stopping a running clock between moves — pause, flag, resign, draw, forfeit,
+ * board result: the side to move is charged the time that ran, floored at 0.
+ * No compensation and no increment (those belong to a move, `chargeMove`).
+ * Mirrors scalachess `Clock.stop`: `players.update(color, _.takeTime(elapsed))`
+ * with `remaining` floored at 0. A flagged side therefore reads 0 by arithmetic.
+ */
+export function settleRemainingMs(remainingMs: number, elapsedMs: number): number {
+  return Math.max(0, finiteOr(remainingMs, 0) - Math.max(0, finiteOr(elapsedMs, 0)));
+}
+
+/**
  * min(quota.quotaMs, MAX_GRACE_MS). Mirrors scalachess `Clock.outOfTime`:
  * `withGrace` uses `min(quota, 200 cs)`.
  */

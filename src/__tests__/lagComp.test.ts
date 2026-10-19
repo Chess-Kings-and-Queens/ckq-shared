@@ -6,6 +6,7 @@ import {
   graceMs,
   initialLagQuota,
   reportedLagMs,
+  settleRemainingMs,
   withTrustedLag,
 } from '../lagComp';
 
@@ -161,5 +162,29 @@ describe('flaggedAt', () => {
   test('grace 0 is the plain rule', () => {
     expect(flaggedAt(1000, 1000, 0)).toBe(true);
     expect(flaggedAt(1000, 999, 0)).toBe(false);
+  });
+});
+
+describe('settleRemainingMs', () => {
+  test('elapsed past remaining floors at 0 (a flagged side reads 0)', () => {
+    expect(settleRemainingMs(54 * SEC, 60 * SEC)).toBe(0);
+  });
+
+  test('elapsed within remaining is charged', () => {
+    expect(settleRemainingMs(54 * SEC, 10 * SEC)).toBe(44 * SEC);
+  });
+
+  test('elapsed 0 leaves the clock unchanged', () => {
+    expect(settleRemainingMs(54 * SEC, 0)).toBe(54 * SEC);
+  });
+
+  test('negative elapsed is not credited', () => {
+    expect(settleRemainingMs(54 * SEC, -5 * SEC)).toBe(54 * SEC);
+  });
+
+  test('non-finite inputs fall back to 0 remaining / 0 elapsed', () => {
+    expect(settleRemainingMs(NaN, 10 * SEC)).toBe(0);
+    expect(settleRemainingMs(54 * SEC, NaN)).toBe(54 * SEC);
+    expect(settleRemainingMs(54 * SEC, Infinity)).toBe(54 * SEC);
   });
 });
