@@ -29,6 +29,7 @@ export * from './statusDisplay';
 export * from './apiErrors';
 export * from './levelMetricDisplay';
 export * from './tournamentResultLabels';
+export * from './tablebase';
 
 export * from './types/student';
 export * from './types/workLog';
@@ -38,3 +39,4 @@ export * from './types/tournamentResults';
 export * from './types/onlineTournaments';
 export * from './types/liveboard';
 export * from './types/uscfTournaments';
+export * from './types/tablebase';

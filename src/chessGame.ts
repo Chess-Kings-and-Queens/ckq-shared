@@ -1,5 +1,5 @@
 import { Chess, DEFAULT_POSITION, validateFen } from 'chess.js';
-import type { Square } from 'chess.js';
+import type { Move, Square } from 'chess.js';
 import type { GameResult } from './gameOutcome';
 
 // ── ChessGame — the one chess.js boundary ──────────────────────────────────────
@@ -36,6 +36,21 @@ export interface PieceOnSquare {
 type PromotionPiece = 'q' | 'r' | 'b' | 'n';
 
 const toSide = (code: 'w' | 'b'): Side => (code === 'w' ? 'white' : 'black');
+
+/** The one chess.js-move → PlayedMove mapping (get moves, tryMove, legalMoves). */
+function toPlayedMove(m: Move, ply: number): PlayedMove {
+  return {
+    ply,
+    san: m.san,
+    uci: m.from + m.to + (m.promotion ?? ''),
+    from: m.from,
+    to: m.to,
+    ...(m.promotion ? { promotion: m.promotion as PromotionPiece } : {}),
+    color: toSide(m.color),
+    fenBefore: m.before,
+    fenAfter: m.after,
+  };
+}
 
 export class ChessGame {
   /** The position the game started from, exactly as supplied (or the standard start). */
@@ -100,17 +115,7 @@ export class ChessGame {
   }
 
   get moves(): PlayedMove[] {
-    return this.chess.history({ verbose: true }).map((m, ply) => ({
-      ply,
-      san: m.san,
-      uci: m.from + m.to + (m.promotion ?? ''),
-      from: m.from,
-      to: m.to,
-      ...(m.promotion ? { promotion: m.promotion as PromotionPiece } : {}),
-      color: toSide(m.color),
-      fenBefore: m.before,
-      fenAfter: m.after,
-    }));
+    return this.chess.history({ verbose: true }).map((m, ply) => toPlayedMove(m, ply));
   }
 
   /** Plays a move on this game. Never throws. */
@@ -147,6 +152,12 @@ export class ChessGame {
     } catch {
       return [];
     }
+  }
+
+  /** Every legal move of the side to move — one entry per promotion piece. */
+  legalMoves(): PlayedMove[] {
+    const ply = this.chess.history().length;
+    return this.chess.moves({ verbose: true }).map((m) => toPlayedMove(m, ply));
   }
 
   needsPromotion(from: string, to: string): boolean {
@@ -232,17 +243,7 @@ export class ChessGame {
       const ply = this.chess.history().length;
       const m = this.chess.move(move);
       if (!m) return null;
-      return {
-        ply,
-        san: m.san,
-        uci: m.from + m.to + (m.promotion ?? ''),
-        from: m.from,
-        to: m.to,
-        ...(m.promotion ? { promotion: m.promotion as PromotionPiece } : {}),
-        color: toSide(m.color),
-        fenBefore: m.before,
-        fenAfter: m.after,
-      };
+      return toPlayedMove(m, ply);
     } catch {
       return null;
     }
