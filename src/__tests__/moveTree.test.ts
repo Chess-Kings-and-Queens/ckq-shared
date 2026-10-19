@@ -112,4 +112,13 @@ describe('movePieceInFen', () => {
     const result = movePieceInFen(fen, 'e2', 'e4', 'P');
     expect(result.split(' ').slice(1)).toEqual(['w', 'KQkq', '-', '3', '7']);
   });
+
+  test('returns an unreadable FEN unchanged (D14)', () => {
+    expect(movePieceInFen('garbage', 'e2', 'e4', 'P')).toBe('garbage');
+  });
+
+  test('a 4-field input comes back with six fields ending 0 1', () => {
+    const result = movePieceInFen('4k3/8/8/8/8/8/4P3/4K3 w - -', 'e2', 'e4', 'P');
+    expect(result).toBe('4k3/8/8/8/4P3/8/8/4K3 w - - 0 1');
+  });
 });

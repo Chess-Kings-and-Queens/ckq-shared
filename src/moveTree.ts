@@ -1,5 +1,6 @@
 import { PgnReader } from '@mliebelt/pgn-reader';
 import { START_FEN } from './chessUtils';
+import { fenFields, fenFromFields } from './fen';
 
 // ── Move tree ──────────────────────────────────────────────────────────────────
 //
@@ -83,8 +84,9 @@ export function buildTreeFromPgn(pgn: string): MoveNode {
  * unit-tested directly and reused by ckq-mobile's promotion picker.
  */
 export function movePieceInFen(fen: string, from: string, to: string, pieceChar: string): string {
-  const [board, ...rest] = fen.split(' ');
-  const grid = board.split('/').map((rank) => {
+  const f = fenFields(fen);
+  if (!f) return fen;
+  const grid = f.placement.split('/').map((rank) => {
     const row: string[] = [];
     for (const ch of rank) {
       if (ch >= '1' && ch <= '8') for (let i = 0; i < parseInt(ch); i++) row.push('.');
@@ -105,5 +107,5 @@ export function movePieceInFen(fen: string, from: string, to: string, pieceChar:
       return s + ch;
     }, ''))
     .join('/');
-  return [newBoard, ...rest].join(' ');
+  return fenFromFields({ ...f, placement: newBoard });
 }

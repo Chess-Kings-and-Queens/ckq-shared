@@ -1,6 +1,7 @@
 import { ChessGame } from './chessGame';
 import type { Side } from './chessGame';
 import { draftFromFen, placementToMap, validatePosition } from './boardEditor';
+import { fenFields, fenFromFields } from './fen';
 import type { TablebaseCategory, TablebaseWdl } from './types/tablebase';
 
 /**
@@ -12,22 +13,22 @@ export const SYZYGY_MAX_PIECES = 7;
 
 /** Pieces on the board; 0 for an unreadable placement. */
 export function countPieces(fen: string): number {
-  if (typeof fen !== 'string') return 0;
-  return placementToMap(fen.trim().split(/\s+/)[0] ?? '')?.size ?? 0;
+  return placementToMap(fenFields(fen)?.placement ?? '')?.size ?? 0;
 }
 
 /**
  * One definition of "the same position": placement, side to move, castling and
  * en passant from ChessGame's canonical FEN (chess.js keeps an en-passant square
- * only when a capture is possible). Move clocks are ignored (plan D6, D21). An
- * unreadable FEN keys on its first three fields plus '-', so the result is never
- * null and a typed en-passant field never splits one position in two.
+ * only when a capture is possible). Move clocks are ignored (plan D6, D21). A
+ * readable-but-illegal FEN keys on its first three fields plus '-', so a typed
+ * en-passant field never splits one position in two; text `fenFields` rejects
+ * keys on its trimmed self. The result is never null.
  */
 export function positionKey(fen: string): string {
   const game = ChessGame.fromFen(fen);
-  if (game) return game.fen.split(' ').slice(0, 4).join(' ');
-  const fields = String(fen ?? '').trim().split(/\s+/).slice(0, 3);
-  return [...fields, '-'].join(' ');
+  const f = fenFields(game ? game.fen : fen);
+  if (!f) return String(fen ?? '').trim();
+  return game ? `${f.placement} ${f.turn} ${f.castling} ${f.enPassant}` : `${f.placement} ${f.turn} ${f.castling} -`;
 }
 
 export type TablebaseIneligibleReason = 'invalid-fen' | 'too-many-pieces' | 'castling-rights';
@@ -50,9 +51,8 @@ export function tablebaseEligibility(fen: string, maxPieces: number = SYZYGY_MAX
   if (draft.castling !== '-') return { ok: false, reason: 'castling-rights', pieces };
   // The game is the position the tables answer: no castling rights. chess.js keeps
   // impossible rights and generates castling moves for them, so they are dropped here (D22).
-  const fields = fen.trim().split(/\s+/);
-  fields[2] = '-';
-  const game = ChessGame.fromFen(fields.join(' '));
+  const f = fenFields(fen)!; // non-null: draft is non-null
+  const game = ChessGame.fromFen(fenFromFields({ ...f, castling: '-' }));
   if (!game) return { ok: false, reason: 'invalid-fen', pieces };
   return { ok: true, game, pieces };
 }

@@ -1,6 +1,7 @@
 import { Chess, DEFAULT_POSITION, validateFen } from 'chess.js';
 import type { Move, Square } from 'chess.js';
 import type { GameResult } from './gameOutcome';
+import { fenFields } from './fen';
 
 // ── ChessGame — the one chess.js boundary ──────────────────────────────────────
 //
@@ -214,9 +215,9 @@ export class ChessGame {
 
     const fenTag = this.startFen !== DEFAULT_POSITION ? `[FEN "${this.startFen}"]\n[SetUp "1"]\n\n` : '';
 
-    const fenParts = this.startFen.split(' ');
-    let moveNum = parseInt(fenParts[5] ?? '1', 10) || 1;
-    const startColor = fenParts[1] ?? 'w';
+    const start = fenFields(this.startFen);
+    let moveNum = start?.fullmove ?? 1;
+    const startColor = start?.turn ?? 'w';
 
     let moveText = '';
     moves.forEach((move, i) => {
