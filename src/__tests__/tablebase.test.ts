@@ -7,6 +7,7 @@ import {
   tablebaseWinner,
 } from '../tablebase';
 import * as shared from '../index';
+import { fenFields } from '../fen';
 import { ChessGame } from '../chessGame';
 import type { TablebaseWdl } from '../types/tablebase';
 
@@ -48,6 +49,9 @@ describe('positionKey', () => {
   test('is never null for garbage', () => {
     expect(positionKey('garbage')).toEqual(expect.any(String));
     expect(positionKey(undefined as unknown as string)).toEqual(expect.any(String));
+    expect(positionKey('garbage')).toBe('garbage');
+    // ChessGame.fromFen treats a missing FEN as the start position (unchanged behaviour).
+    expect(positionKey(undefined as unknown as string)).toBe('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -');
   });
 
   test('two unreadable FENs differing only in en-passant or clocks share a key', () => {
@@ -103,7 +107,7 @@ describe('tablebaseEligibility', () => {
     if (r.ok) {
       expect(r.game.legalMoves()).toHaveLength(5);
       expect(r.game.legalMoves().some((m) => m.san.startsWith('O-O'))).toBe(false);
-      expect(r.game.fen.split(' ')[2]).toBe('-');
+      expect(fenFields(r.game.fen)?.castling).toBe('-');
     }
   });
 

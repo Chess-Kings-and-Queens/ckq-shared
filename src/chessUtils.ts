@@ -1,4 +1,5 @@
 import { ChessGame } from './chessGame';
+import { fenFields } from './fen';
 
 /**
  * Convert a single UCI move (e.g. "e2e4", "a7a8q") to SAN given the position FEN.
@@ -124,8 +125,8 @@ export function gameLabel(pgn: string, idx: number): string {
 
 /** Auto-detect PGN vs FEN from input text. */
 export function isFenString(text: string): boolean {
-  const parts = text.trim().split(/\s+/);
-  return parts.length >= 4 && parts[0].split('/').length === 8;
+  const f = fenFields(text);
+  return f !== null && f.placement.split('/').length === 8;
 }
 
 // ── Shape serialization (for liveboard socket) ──────────────────────────────
@@ -154,11 +155,8 @@ export function deserializeShapes(wire: string[][]): { orig: string; dest?: stri
  * Returns defaults { color: 'w', fullMove: 1 } for an empty or invalid FEN.
  */
 export function fenMoveContext(fen: string): { color: 'w' | 'b'; fullMove: number } {
-  const parts = fen.split(' ');
-  return {
-    color: parts[1] === 'b' ? 'b' : 'w',
-    fullMove: parseInt(parts[5] ?? '1', 10) || 1,
-  };
+  const f = fenFields(fen);
+  return f ? { color: f.turn, fullMove: f.fullmove } : { color: 'w', fullMove: 1 };
 }
 
 /**

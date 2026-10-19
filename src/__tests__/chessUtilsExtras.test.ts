@@ -88,6 +88,10 @@ describe('isFenString', () => {
     expect(isFenString('8/8/4k3/8/4K3/8/8/8 w - -')).toBe(true);
   });
 
+  test('rejects 8 rows with a turn field that is not w/b (D11)', () => {
+    expect(isFenString('a/b/c/d/e/f/g/h x - -')).toBe(false);
+  });
+
   test('rejects PGN move text', () => {
     expect(isFenString('1. e4 e5 2. Nf3 Nc6 *')).toBe(false);
   });

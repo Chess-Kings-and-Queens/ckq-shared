@@ -1,5 +1,6 @@
 import { ChessGame, isLegalFenSyntax, isSquareAttacked } from './chessGame';
 import { START_FEN } from './chessUtils';
+import { fenFields } from './fen';
 
 export const START_PLACEMENT = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR';
 export const EMPTY_PLACEMENT = '8/8/8/8/8/8/8/8';
@@ -115,16 +116,14 @@ export function enPassantCandidates(placement: string, turn: 'w' | 'b'): string[
 
 /** First four FEN fields → draft. null when < 4 fields, not 8 rows, a row not summing to 8, an unknown letter, or turn not w/b. Castling pruned; en passant kept only if a candidate; counters discarded (D8). */
 export function draftFromFen(fen: string): PositionDraft | null {
-  const fields = fen.trim().split(/\s+/);
-  if (fields.length < 4) return null;
-  const [placement, turn, castling, enPassant] = fields;
-  if (placementToMap(placement) === null) return null;
-  if (turn !== 'w' && turn !== 'b') return null;
+  const f = fenFields(fen);
+  if (!f) return null;
+  if (placementToMap(f.placement) === null) return null;
   return {
-    placement,
-    turn,
-    castling: pruneCastling(castling, placement),
-    enPassant: enPassantCandidates(placement, turn).includes(enPassant) ? enPassant : '-',
+    placement: f.placement,
+    turn: f.turn,
+    castling: pruneCastling(f.castling, f.placement),
+    enPassant: enPassantCandidates(f.placement, f.turn).includes(f.enPassant) ? f.enPassant : '-',
   };
 }
 
@@ -146,10 +145,10 @@ function reasonFor(message: string): string {
 export function validatePosition(fen: string): PositionValidity {
   const result = isLegalFenSyntax(fen);
   if (!result.ok) return { ok: false, reason: reasonFor(result.error) };
-  const fields = fen.trim().split(/\s+/);
-  const toMove = fields[1] === 'b' ? 'black' : 'white';
+  const f = fenFields(fen)!; // non-null: isLegalFenSyntax passed
+  const toMove = f.turn === 'b' ? 'black' : 'white';
   const other = toMove === 'white' ? 'black' : 'white';
-  const pieces = placementToMap(fields[0]);
+  const pieces = placementToMap(f.placement);
   let kingSq: string | undefined;
   if (pieces) {
     const kingLetter = other === 'white' ? 'K' : 'k';

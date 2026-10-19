@@ -6,6 +6,7 @@ export * from './quizEvaluator';
 export * from './chessGame';
 export * from './boardStatus';
 export * from './chessUtils';
+export * from './fen';
 export * from './homeworkUtils';
 export * from './decodeJwt';
 export * from './moveTree';

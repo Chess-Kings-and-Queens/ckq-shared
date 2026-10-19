@@ -47,6 +47,10 @@ describe('fenMoveContext', () => {
   test('empty string returns defaults', () => {
     expect(fenMoveContext('')).toEqual({ color: 'w', fullMove: 1 });
   });
+
+  test('a 3-token FEN returns defaults (D12)', () => {
+    expect(fenMoveContext('8/8/8/8/8/8/8/8 b -')).toEqual({ color: 'w', fullMove: 1 });
+  });
 });
 
 describe('formatMoveSequence', () => {
