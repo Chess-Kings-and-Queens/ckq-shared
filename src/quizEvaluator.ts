@@ -1,4 +1,5 @@
-import { PgnReader, PgnReaderMove } from '@mliebelt/pgn-reader';
+import { parsePgnTree, mainLine } from './moveTree';
+import { formatMoveSequence, fenMoveContext } from './chessUtils';
 
 export enum MoveResult {
   Correct = 'Correct',
@@ -7,100 +8,61 @@ export enum MoveResult {
   Terminated = 'Terminated',
 }
 
+/** One solution ply: the SAN as written, the FEN after it, the side that played it. */
+export interface QuizMove { san: string; fen: string; turn: 'w' | 'b' }
+
 export type EvaluateMoveResult = {
   result: MoveResult;
-  /** The next move to auto-play (opponent's reply), if any */
-  nextMove?: PgnReaderMove;
+  /** The opponent's reply to auto-play, when the student is correct so far and it is not their turn. */
+  nextSan?: string;
   score: number;
   /** Player moves matched before the first miss (all of them when Correct). */
   correctPlayerMoves: number;
 };
 
-type BuildMovesResult = { noOfPlayerMoves: number; quizMoves: PgnReaderMove[] };
-
 export class QuizEvaluator {
-  readonly quizMoves: PgnReaderMove[];
+  readonly quizMoves: QuizMove[];
   readonly maxScore: number;
-  readonly playerColor: string;
+  readonly playerColor: 'w' | 'b';
   readonly scorePerMove: number;
+  /** The position the quiz starts from (the PGN's [FEN] tag, else the start position). */
+  readonly startFen: string;
 
+  /** Throws `Error('Invalid quiz PGN')` when the PGN cannot be parsed; empty move text does not throw. */
   constructor(quizPgn: string, maxScore: number) {
-    const reader = new PgnReader({ pgn: quizPgn });
-    const firstTurn = reader.getFirstMove()?.turn ?? 'w';
-    const built = this.buildQuizMoves(reader, firstTurn);
-
-    this.quizMoves = built?.quizMoves ?? [];
+    const root = parsePgnTree(quizPgn);
+    if (!root) throw new Error('Invalid quiz PGN');
+    const line = mainLine(root);
+    this.startFen = root.fen;
+    this.quizMoves = line.map((n) => ({ san: n.san, fen: n.fen, turn: n.color }));
+    this.playerColor = line[0]?.color ?? 'w';
     this.maxScore = maxScore;
-    this.playerColor = firstTurn;
-    this.scorePerMove =
-      built && built.noOfPlayerMoves > 0
-        ? maxScore / built.noOfPlayerMoves
-        : 0;
+    const noOfPlayerMoves = this.quizMoves.filter((m) => m.turn === this.playerColor).length;
+    this.scorePerMove = noOfPlayerMoves > 0 ? maxScore / noOfPlayerMoves : 0;
   }
 
-  private buildQuizMoves(
-    reader: PgnReader,
-    playerColor: string
-  ): BuildMovesResult | undefined {
-    let noOfPlayerMoves = 0;
-    const quizMoves: PgnReaderMove[] = [];
-    let move: PgnReaderMove | null | undefined = reader.getFirstMove();
-    if (!move) return undefined;
-
-    if (move.turn === playerColor) noOfPlayerMoves++;
-    quizMoves.push(move);
-
-    while (move?.next !== undefined) {
-      move = reader.getMove(move.next);
-      if (!move) break;
-      if (move.turn === playerColor) noOfPlayerMoves++;
-      quizMoves.push(move);
-    }
-
-    return { noOfPlayerMoves, quizMoves };
+  /** The solution with move numbers, e.g. "13... Qg1+ 14. Kh4 Qh2+" ('' when there are no moves). */
+  get solutionLine(): string {
+    if (this.quizMoves.length === 0) return '';
+    const { color, fullMove } = fenMoveContext(this.startFen);
+    return formatMoveSequence(this.quizMoves.map((m) => m.san), color, fullMove);
   }
 
-  /**
-   * Evaluate the moves the student has played so far against the quiz solution.
-   * @param moves - the sequence of moves played so far (from index 0)
-   */
-  evaluate(moves: PgnReaderMove[]): EvaluateMoveResult {
-    if (this.quizMoves.length === 0) {
-      return { result: MoveResult.Terminated, score: 0, correctPlayerMoves: 0 };
-    }
-    if (moves.length === 0) {
-      return { result: MoveResult.Pending, score: 0, correctPlayerMoves: 0 };
-    }
-
+  /** Evaluate the SANs played so far (student and auto-played opponent, from index 0). */
+  evaluate(sans: readonly string[]): EvaluateMoveResult {
+    if (this.quizMoves.length === 0) return { result: MoveResult.Terminated, score: 0, correctPlayerMoves: 0 };
+    if (sans.length === 0) return { result: MoveResult.Pending, score: 0, correctPlayerMoves: 0 };
     let correctPlayerMoves = 0;
-
-    const allCorrect = moves.every((move, i) => {
+    const allCorrect = sans.every((san, i) => {
       const expected = this.quizMoves[i];
-      const match = move.notation.notation === expected.notation.notation;
-      if (match && move.turn === this.playerColor) correctPlayerMoves++;
+      const match = expected !== undefined && san === expected.san;
+      if (match && expected.turn === this.playerColor) correctPlayerMoves++;
       return match;
     });
-
-    if (!allCorrect) {
-      return {
-        result: MoveResult.Incorrect,
-        score: this.scorePerMove * correctPlayerMoves,
-        correctPlayerMoves,
-      };
-    }
-
-    if (moves.length === this.quizMoves.length) {
-      return { result: MoveResult.Correct, score: this.maxScore, correctPlayerMoves };
-    }
-
-    // Correct so far — return the next move if it's the opponent's turn
-    const next = this.quizMoves[moves.length];
-    return {
-      result: MoveResult.Pending,
-      nextMove: next.turn !== this.playerColor ? next : undefined,
-      score: 0,
-      correctPlayerMoves,
-    };
+    if (!allCorrect) return { result: MoveResult.Incorrect, score: this.scorePerMove * correctPlayerMoves, correctPlayerMoves };
+    if (sans.length >= this.quizMoves.length) return { result: MoveResult.Correct, score: this.maxScore, correctPlayerMoves };
+    const next = this.quizMoves[sans.length];
+    return { result: MoveResult.Pending, nextSan: next.turn !== this.playerColor ? next.san : undefined, score: 0, correctPlayerMoves };
   }
 }
 
@@ -126,16 +88,11 @@ export type PositionGrade = {
  *   Pending / Terminated (no moves, an unfinished correct prefix, empty PGN)
  *              → { isCorrect: false, score: 0 }
  *
- * Moves after the end of the solution line are ignored. Each SAN is wrapped
- * exactly as useQuizEvaluator does — the expected move's `turn` with the
- * played notation — so preview and server compare the same strings.
+ * Moves after the end of the solution line are ignored.
  */
 export function gradePositionAttempt(pgn: string, sans: string[]): PositionGrade {
   const evaluator = new QuizEvaluator(pgn, 100);
-  const played = sans.slice(0, evaluator.quizMoves.length).map(
-    (san, i) => ({ notation: { notation: san }, turn: evaluator.quizMoves[i].turn }) as PgnReaderMove,
-  );
-  const evaluated = evaluator.evaluate(played);
+  const evaluated = evaluator.evaluate(sans.slice(0, evaluator.quizMoves.length));
   const correctPlayerMoves = evaluated.correctPlayerMoves;
   if (evaluated.result === MoveResult.Correct) return { isCorrect: true, score: 100, result: evaluated.result, correctPlayerMoves };
   if (evaluated.result === MoveResult.Incorrect) return { isCorrect: false, score: evaluated.score, result: evaluated.result, correctPlayerMoves };

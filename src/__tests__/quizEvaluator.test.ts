@@ -1,15 +1,8 @@
 import { QuizEvaluator, MoveResult, gradePositionAttempt } from '../quizEvaluator';
 import { gradePositionAttempt as gradePositionAttemptFromBarrel } from '../index';
 import { buildQuizPgn, START_FEN } from '../chessUtils';
-import { PgnReader, PgnReaderMove } from '@mliebelt/pgn-reader';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function makeMoves(pgn: string, count: number) {
-  const reader = new PgnReader({ pgn });
-  const moves = reader.getMoves();
-  return moves.slice(0, count);
-}
 
 // Simple 2-move PGN: white plays e4, black plays e5
 const TWO_MOVE_PGN = '1. e4 e5';
@@ -49,6 +42,34 @@ describe('QuizEvaluator constructor', () => {
     const q = new QuizEvaluator('1. e4 e5 2. Nf3 Nc6', 100);
     expect(q.scorePerMove).toBe(50);
   });
+
+  test('throws on an unparseable PGN', () => {
+    expect(() => new QuizEvaluator('garbage not a pgn {{{', 100)).toThrow('Invalid quiz PGN');
+  });
+
+  test('an empty PGN has no quiz moves and does not throw', () => {
+    const q = new QuizEvaluator('', 100);
+    expect(q.quizMoves).toEqual([]);
+  });
+
+  test('startFen is the [FEN] tag value when the PGN has one', () => {
+    const q = new QuizEvaluator(buildQuizPgn(FEN_AFTER_E4, ['e5']), 100);
+    expect(q.startFen).toBe(FEN_AFTER_E4);
+  });
+
+  test('startFen is the start position for a tagless PGN', () => {
+    const q = new QuizEvaluator('1. e4', 100);
+    expect(q.startFen).toBe(START_FEN);
+  });
+
+  test('solutionLine numbers a black-to-move quiz from its position', () => {
+    const q = new QuizEvaluator(buildQuizPgn(FEN_AFTER_E4, ['e5', 'Nf3']), 100);
+    expect(q.solutionLine).toBe('1... e5 2. Nf3');
+  });
+
+  test('solutionLine is empty when there are no moves', () => {
+    expect(new QuizEvaluator('', 100).solutionLine).toBe('');
+  });
 });
 
 // ─── evaluate — Pending (empty moves) ────────────────────────────────────────
@@ -66,7 +87,7 @@ describe('QuizEvaluator.evaluate — terminated', () => {
   test('returns Terminated when quiz PGN has no moves (empty game)', () => {
     // PGN with no moves
     const q = new QuizEvaluator('*', 100);
-    const moves = makeMoves(TWO_MOVE_PGN, 1);
+    const moves = ['e4'];
     expect(q.evaluate(moves)).toMatchObject({ result: MoveResult.Terminated, score: 0 });
   });
 });
@@ -76,7 +97,7 @@ describe('QuizEvaluator.evaluate — terminated', () => {
 describe('QuizEvaluator.evaluate — correct', () => {
   test('returns Correct with full score when all moves match', () => {
     const q = new QuizEvaluator(ONE_MOVE_PGN, 100);
-    const moves = makeMoves(ONE_MOVE_PGN, 1);
+    const moves = ['e4'];
     const result = q.evaluate(moves);
     expect(result.result).toBe(MoveResult.Correct);
     expect(result.score).toBe(100);
@@ -84,7 +105,7 @@ describe('QuizEvaluator.evaluate — correct', () => {
 
   test('returns Correct for a 2-move PGN when both moves match', () => {
     const q = new QuizEvaluator(TWO_MOVE_PGN, 100);
-    const moves = makeMoves(TWO_MOVE_PGN, 2);
+    const moves = ['e4', 'e5'];
     const result = q.evaluate(moves);
     expect(result.result).toBe(MoveResult.Correct);
     expect(result.score).toBe(100);
@@ -96,7 +117,7 @@ describe('QuizEvaluator.evaluate — correct', () => {
 describe('QuizEvaluator.evaluate — incorrect', () => {
   test('returns Incorrect with 0 score on first wrong move', () => {
     const q = new QuizEvaluator(ONE_MOVE_PGN, 100); // expects e4
-    const wrongMoves = makeMoves('1. d4', 1);       // played d4
+    const wrongMoves = ['d4'];       // played d4
     const result = q.evaluate(wrongMoves);
     expect(result.result).toBe(MoveResult.Incorrect);
     expect(result.score).toBe(0);
@@ -106,35 +127,35 @@ describe('QuizEvaluator.evaluate — incorrect', () => {
     const pgn = '1. e4 e5 2. Nf3 Nc6';
     const q = new QuizEvaluator(pgn, 100);
     // Build: correct first 3 moves, wrong 4th
-    const correct3 = makeMoves(pgn, 3);
-    const wrong = makeMoves('1. e4 e5 2. Nf3 d6', 4);
+    const correct3 = ['e4', 'e5', 'Nf3'];
+    const wrong = ['e4', 'e5', 'Nf3', 'd6'];
     const result = q.evaluate(wrong);
     expect(result.result).toBe(MoveResult.Incorrect);
   });
 });
 
-// ─── evaluate — Pending with nextMove (opponent auto-reply) ──────────────────
+// ─── evaluate — Pending with nextSan (opponent auto-reply) ──────────────────
 
-describe('QuizEvaluator.evaluate — pending with nextMove', () => {
-  test('provides nextMove when correct but opponent still needs to play', () => {
+describe('QuizEvaluator.evaluate — pending with nextSan', () => {
+  test('provides nextSan when correct but opponent still needs to play', () => {
     // 2-move PGN: white plays e4, black plays e5
-    // After white plays e4 correctly, result should be Pending with nextMove = e5 (black)
+    // After white plays e4 correctly, result should be Pending with nextSan = e5 (black)
     const q = new QuizEvaluator(TWO_MOVE_PGN, 100);
-    const firstMove = makeMoves(TWO_MOVE_PGN, 1);
+    const firstMove = ['e4'];
     const result = q.evaluate(firstMove);
     expect(result.result).toBe(MoveResult.Pending);
-    // nextMove should be the opponent's e5
-    expect(result.nextMove?.notation.notation).toBe('e5');
+    // nextSan should be the opponent's e5
+    expect(result.nextSan).toBe('e5');
   });
 
-  test('does not provide nextMove when the next move is the player\'s own turn', () => {
+  test('does not provide nextSan when the next move is the player\'s own turn', () => {
     // 3-move PGN: e4 e5 Nf3 — after e4+e5 (both correct), next is Nf3 (white = player)
     const pgn = '1. e4 e5 2. Nf3';
     const q = new QuizEvaluator(pgn, 100);
-    const twoMoves = makeMoves(pgn, 2);
+    const twoMoves = ['e4', 'e5'];
     const result = q.evaluate(twoMoves);
     expect(result.result).toBe(MoveResult.Pending);
-    expect(result.nextMove).toBeUndefined();
+    expect(result.nextSan).toBeUndefined();
   });
 });
 
@@ -143,14 +164,6 @@ describe('QuizEvaluator.evaluate — pending with nextMove', () => {
 // buildQuizPgn generates the PGN, QuizEvaluator parses it, and student plays.
 
 const FEN_AFTER_E4 = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
-
-/**
- * Build a synthetic PgnReaderMove exactly as useQuizEvaluator.onPlayerMove does
- * (same single cast to the library type — see useQuizEvaluator.ts).
- */
-function syntheticMove(san: string, turn: string | undefined): PgnReaderMove {
-  return { notation: { notation: san }, turn } as PgnReaderMove;
-}
 
 describe('buildQuizPgn → QuizEvaluator integration', () => {
   // ── White-to-move quizzes ─────────────────────────────────────────────────
@@ -161,7 +174,7 @@ describe('buildQuizPgn → QuizEvaluator integration', () => {
     expect(q.playerColor).toBe('w');
     expect(q.quizMoves).toHaveLength(1);
 
-    const result = q.evaluate([syntheticMove('e4', q.quizMoves[0].turn)]);
+    const result = q.evaluate(['e4']);
     expect(result.result).toBe(MoveResult.Correct);
     expect(result.score).toBe(100);
   });
@@ -170,7 +183,7 @@ describe('buildQuizPgn → QuizEvaluator integration', () => {
     const pgn = buildQuizPgn(START_FEN, ['e4']);
     const q = new QuizEvaluator(pgn, 100);
 
-    const result = q.evaluate([syntheticMove('d4', q.quizMoves[0].turn)]);
+    const result = q.evaluate(['d4']);
     expect(result.result).toBe(MoveResult.Incorrect);
   });
 
@@ -182,10 +195,10 @@ describe('buildQuizPgn → QuizEvaluator integration', () => {
     expect(q.quizMoves).toHaveLength(2);
 
     // Student plays e4 (correct first move)
-    const result = q.evaluate([syntheticMove('e4', q.quizMoves[0].turn)]);
+    const result = q.evaluate(['e4']);
     expect(result.result).toBe(MoveResult.Pending);
     // Evaluator should provide e5 for the opponent to auto-play
-    expect(result.nextMove?.notation.notation).toBe('e5');
+    expect(result.nextSan).toBe('e5');
   });
 
   // ── Black-to-move quizzes ─────────────────────────────────────────────────
@@ -201,7 +214,7 @@ describe('buildQuizPgn → QuizEvaluator integration', () => {
     const pgn = buildQuizPgn(FEN_AFTER_E4, ['e5']);
     const q = new QuizEvaluator(pgn, 100);
 
-    const result = q.evaluate([syntheticMove('e5', q.quizMoves[0].turn)]);
+    const result = q.evaluate(['e5']);
     expect(result.result).toBe(MoveResult.Correct);
     expect(result.score).toBe(100);
   });
@@ -210,7 +223,7 @@ describe('buildQuizPgn → QuizEvaluator integration', () => {
     const pgn = buildQuizPgn(FEN_AFTER_E4, ['e5']);
     const q = new QuizEvaluator(pgn, 100);
 
-    const result = q.evaluate([syntheticMove('c5', q.quizMoves[0].turn)]);
+    const result = q.evaluate(['c5']);
     expect(result.result).toBe(MoveResult.Incorrect);
   });
 
@@ -222,10 +235,10 @@ describe('buildQuizPgn → QuizEvaluator integration', () => {
     expect(q.quizMoves).toHaveLength(2);
 
     // Student plays e5 (correct first move)
-    const result = q.evaluate([syntheticMove('e5', q.quizMoves[0].turn)]);
+    const result = q.evaluate(['e5']);
     expect(result.result).toBe(MoveResult.Pending);
     // Evaluator should provide Nf3 for opponent auto-play
-    expect(result.nextMove?.notation.notation).toBe('Nf3');
+    expect(result.nextSan).toBe('Nf3');
   });
 });
 
@@ -234,27 +247,24 @@ describe('buildQuizPgn → QuizEvaluator integration', () => {
 describe('QuizEvaluator.evaluate — correctPlayerMoves', () => {
   const pgn = '1. e4 e5 2. Nf3 Nc6 3. Bb5 a6';
   const sans = ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5', 'a6'];
-  const wrap = (q: QuizEvaluator, list: string[]) =>
-    list.map((san, i) => syntheticMove(san, q.quizMoves[i].turn));
-
   test('Correct: counts every player move', () => {
     const q = new QuizEvaluator(pgn, 100);
-    expect(q.evaluate(wrap(q, sans)).correctPlayerMoves).toBe(3);
+    expect(q.evaluate(sans).correctPlayerMoves).toBe(3);
   });
 
   test('Incorrect at player move 2: counts 1', () => {
     const q = new QuizEvaluator(pgn, 100);
-    expect(q.evaluate(wrap(q, ['e4', 'e5', 'd4'])).correctPlayerMoves).toBe(1);
+    expect(q.evaluate(['e4', 'e5', 'd4']).correctPlayerMoves).toBe(1);
   });
 
   test('Incorrect at player move 1: counts 0', () => {
     const q = new QuizEvaluator(pgn, 100);
-    expect(q.evaluate(wrap(q, ['d4'])).correctPlayerMoves).toBe(0);
+    expect(q.evaluate(['d4']).correctPlayerMoves).toBe(0);
   });
 
   test('Pending (correct prefix): counts matched player moves', () => {
     const q = new QuizEvaluator(pgn, 100);
-    const result = q.evaluate(wrap(q, ['e4']));
+    const result = q.evaluate(['e4']);
     expect(result.result).toBe(MoveResult.Pending);
     expect(result.correctPlayerMoves).toBe(1);
   });
@@ -266,7 +276,7 @@ describe('QuizEvaluator.evaluate — correctPlayerMoves', () => {
 
   test('Terminated (empty PGN): 0', () => {
     const q = new QuizEvaluator('*', 100);
-    expect(q.evaluate(makeMoves(TWO_MOVE_PGN, 1)).correctPlayerMoves).toBe(0);
+    expect(q.evaluate(['e4']).correctPlayerMoves).toBe(0);
   });
 });
 
@@ -372,9 +382,9 @@ describe('gradePositionAttempt', () => {
     test.each(cases)('pgn %#', (pgn, sans) => {
       const q = new QuizEvaluator(pgn, 100);
       let last = q.evaluate([]);
-      const played: PgnReaderMove[] = [];
+      const played: string[] = [];
       for (let i = 0; i < sans.length; i++) {
-        played.push(syntheticMove(sans[i], q.quizMoves[i].turn));
+        played.push(sans[i]);
         last = q.evaluate([...played]);
         if (last.result === MoveResult.Incorrect) break;
       }

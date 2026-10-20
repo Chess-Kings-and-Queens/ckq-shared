@@ -26,13 +26,14 @@ export function createRoot(fen: string = START_FEN): MoveNode {
 
 /**
  * Parse a PGN string into a MoveNode tree, including all variations.
- * Returns an empty root on invalid PGN — does not throw.
+ * `null` when pgn-reader cannot parse it; an empty root for blank input.
+ * This is the one place in the platform that reads a PGN (pgn-single-source-plan.md D1).
  *
  * Variations are added as siblings of the main move (both children of the
  * same parent node). InlineNotation reads n.parent.children.slice(1) to
  * render them inline — this structure is what it expects.
  */
-export function buildTreeFromPgn(pgn: string): MoveNode {
+export function parsePgnTree(pgn: string): MoveNode | null {
   if (!pgn.trim()) return createRoot();
   try {
     const reader = new PgnReader({ pgn, manyGames: false });
@@ -69,8 +70,24 @@ export function buildTreeFromPgn(pgn: string): MoveNode {
     if (first) buildLine(root, first);
     return root;
   } catch {
-    return createRoot();
+    return null;
   }
+}
+
+/** Parse a PGN into a MoveNode tree; an empty root (never a throw) on invalid PGN. */
+export function buildTreeFromPgn(pgn: string): MoveNode {
+  return parsePgnTree(pgn) ?? createRoot();
+}
+
+/** The main line of a tree: each node's first child, root excluded. */
+export function mainLine(root: MoveNode): MoveNode[] {
+  const line: MoveNode[] = [];
+  let node = root;
+  while (node.children.length > 0) {
+    node = node.children[0];
+    line.push(node);
+  }
+  return line;
 }
 
 // ── Promotion visual FEN ──────────────────────────────────────────────────────
