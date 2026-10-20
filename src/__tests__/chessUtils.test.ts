@@ -4,6 +4,9 @@ import {
   buildQuizPgn,
   formatMoveSequence,
   fenMoveContext,
+  parsePgnHeader,
+  withPgnTags,
+  moveNumberLabel,
   sanToUci,
   engineMovesFirst,
   START_FEN,
@@ -237,5 +240,63 @@ describe('engineMovesFirst', () => {
   test('a black-to-move position flips both answers', () => {
     expect(engineMovesFirst(FEN_AFTER_E4, 'white')).toBe(true);
     expect(engineMovesFirst(FEN_AFTER_E4, 'black')).toBe(false);
+  });
+});
+
+describe('withPgnTags', () => {
+  const SETUP_FEN = '4k3/8/8/8/8/8/4P3/4K3 b - - 0 7';
+
+  test('an empty PGN with one tag gives the tag, a blank line and *', () => {
+    expect(withPgnTags('', { Event: 'x' })).toBe('[Event "x"]\n\n*');
+  });
+
+  test('a stored SAN list with a FEN gets SetUp, FEN, a blank line and the moves', () => {
+    expect(withPgnTags('e4 e5', { FEN: SETUP_FEN })).toBe(`[SetUp "1"]\n[FEN "${SETUP_FEN}"]\n\ne4 e5`);
+  });
+
+  test('ChessGame.pgn() output for a set-up start keeps its FEN, orders the roster and swaps * for the result', () => {
+    const game = ChessGame.replay(SETUP_FEN, ['Kd7', 'e4']).game;
+    const out = withPgnTags(game.pgn(), { White: 'A', Black: 'B', Result: '1-0' });
+    expect(out).toBe(
+      `[White "A"]\n[Black "B"]\n[Result "1-0"]\n[SetUp "1"]\n[FEN "${SETUP_FEN}"]\n\n7... Kd7 8. e4 1-0`,
+    );
+  });
+
+  test('a given tag overrides the same tag already in the PGN', () => {
+    const out = withPgnTags('[Event "old"]\n\n1. e4 *', { Event: 'new' });
+    expect(out.match(/Event/g)).toHaveLength(1);
+    expect(parsePgnHeader(out).Event).toBe('new');
+  });
+
+  test('an unknown tag is written after the roster', () => {
+    const out = withPgnTags('1. e4 *', { WhiteElo: '1500', White: 'A' });
+    expect(out).toBe('[White "A"]\n[WhiteElo "1500"]\n\n1. e4 *');
+  });
+
+  test('parsePgnHeader round-trips every tag', () => {
+    const tags = { Event: 'E', Site: 'S', Date: '2026.10.19', Round: '1', White: 'A', Black: 'B', Result: '1-0', WhiteElo: '1500', FEN: SETUP_FEN };
+    const parsed = parsePgnHeader(withPgnTags('7... Kd7 8. e4 *', tags));
+    expect(parsed).toEqual({ ...tags, SetUp: '1' });
+  });
+});
+
+describe('moveNumberLabel', () => {
+  const BLACK_TO_MOVE_7 = '4k3/8/8/8/8/8/4P3/4K3 b - - 0 7';
+
+  test('start position: white plies are numbered, black only when it opens a line', () => {
+    expect(moveNumberLabel(START_FEN, 0, false)).toBe('1.');
+    expect(moveNumberLabel(START_FEN, 1, true)).toBe('1...');
+    expect(moveNumberLabel(START_FEN, 1, false)).toBe('');
+    expect(moveNumberLabel(START_FEN, 2, false)).toBe('2.');
+  });
+
+  test('black to move at full-move 7 numbers from 7', () => {
+    expect(moveNumberLabel(BLACK_TO_MOVE_7, 0, true)).toBe('7...');
+    expect(moveNumberLabel(BLACK_TO_MOVE_7, 1, false)).toBe('8.');
+    expect(moveNumberLabel(BLACK_TO_MOVE_7, 2, true)).toBe('8...');
+  });
+
+  test('an unreadable start FEN is numbered from 1.', () => {
+    expect(moveNumberLabel('garbage', 0, false)).toBe('1.');
   });
 });

@@ -63,9 +63,9 @@ export function truncateMoveString(
   return { display: kept.join(' ') + '…', truncated: true, full };
 }
 
-/** Split a multi-game PGN file into individual game strings. */
+/** Split a multi-game PGN file into individual game strings. A leading byte-order mark is dropped. */
 export function splitPgnGames(raw: string): string[] {
-  const lines = raw.split('\n');
+  const lines = raw.replace(/^\uFEFF/, '').split('\n');
   const games: string[] = [];
   let current: string[] = [];
   let seenMoves = false; // true once we've accumulated non-header, non-blank content
@@ -113,6 +113,30 @@ export function parsePgnHeader(pgn: string): Record<string, string> {
   let m;
   while ((m = re.exec(pgn)) !== null) tags[m[1]] = m[2];
   return tags;
+}
+
+/** PGN tag order: the Seven Tag Roster, then the set-up pair, then anything else as given. */
+const PGN_TAG_ORDER = ['Event', 'Site', 'Date', 'Round', 'White', 'Black', 'Result', 'SetUp', 'FEN'];
+const PGN_TAG_LINE = /^\s*\[\w+\s+"[^"]*"\]\s*$/;
+const PGN_RESULT_TOKEN = /\s*(1-0|0-1|1\/2-1\/2|\*)\s*$/;
+
+/**
+ * The one PGN tag writer in the platform (pgn-single-source-plan.md D3). Returns `pgn` with
+ * `tags` applied over any tags it already carries: existing tags are kept, given tags
+ * override, a FEN implies `[SetUp "1"]`, a given Result also replaces the game-termination
+ * token. Tag lines come first in PGN_TAG_ORDER then as given, one blank line, then the move
+ * text (`*` when there is none). `ChessGame.pgn()` is the one move-text writer; pass its
+ * output, a stored SAN list, or '' as `pgn`.
+ */
+export function withPgnTags(pgn: string, tags: Record<string, string>): string {
+  const merged: Record<string, string> = { ...parsePgnHeader(pgn), ...tags };
+  if (merged.FEN && !merged.SetUp) merged.SetUp = '1';
+  let moveText = pgn.split('\n').filter((line) => !PGN_TAG_LINE.test(line)).join('\n').trim();
+  if (tags.Result) moveText = `${moveText.replace(PGN_RESULT_TOKEN, '')} ${tags.Result}`.trim();
+  if (!moveText) moveText = merged.Result ?? '*';
+  const keys = [...PGN_TAG_ORDER.filter((k) => k in merged), ...Object.keys(merged).filter((k) => !PGN_TAG_ORDER.includes(k))];
+  const tagLines = keys.map((k) => `[${k} "${merged[k]}"]`);
+  return tagLines.length ? `${tagLines.join('\n')}\n\n${moveText}` : moveText;
 }
 
 /** Short label for a game in a multi-game selector dropdown. */
@@ -198,6 +222,21 @@ export function formatMoveSequence(
   });
 
   return parts.join(' ');
+}
+
+/**
+ * The move-number label printed before the ply at 0-based `ply` in a game started from
+ * `startFen`: "N." before a white move, "N..." before a black move that opens a line
+ * (`lineStart`), "" otherwise. One rule for the website notation panel and the app's
+ * move strips (pgn-single-source-plan.md D4).
+ */
+export function moveNumberLabel(startFen: string, ply: number, lineStart: boolean): string {
+  const { color, fullMove } = fenMoveContext(startFen);
+  const offset = color === 'b' ? 1 : 0;
+  const number = fullMove + Math.floor((ply + offset) / 2);
+  const white = (ply + offset) % 2 === 0;
+  if (white) return `${number}.`;
+  return lineStart ? `${number}...` : '';
 }
 
 /**

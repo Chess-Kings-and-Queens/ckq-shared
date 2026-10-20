@@ -279,3 +279,13 @@ describe("splitPgnGames", () => {
     expect(g2).toContain(moves2);
   });
 });
+
+describe('splitPgnGames — byte-order mark', () => {
+  test('a BOM-prefixed two-game PGN splits into 2 games and the first does not start with the BOM', () => {
+    const pgn = '\uFEFF[Event "A"]\n\n1. e4 e5 *\n\n[Event "B"]\n\n1. d4 d5 *';
+    const games = splitPgnGames(pgn);
+    expect(games).toHaveLength(2);
+    expect(games[0].startsWith('\uFEFF')).toBe(false);
+    expect(games[0].startsWith('[Event "A"]')).toBe(true);
+  });
+});

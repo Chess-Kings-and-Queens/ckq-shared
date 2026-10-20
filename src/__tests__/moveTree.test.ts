@@ -1,4 +1,4 @@
-import { createRoot, buildTreeFromPgn, movePieceInFen } from '../moveTree';
+import { createRoot, buildTreeFromPgn, movePieceInFen, parsePgnTree, mainLine } from '../moveTree';
 import { START_FEN } from '../chessUtils';
 
 describe('createRoot', () => {
@@ -120,5 +120,41 @@ describe('movePieceInFen', () => {
   test('a 4-field input comes back with six fields ending 0 1', () => {
     const result = movePieceInFen('4k3/8/8/8/8/8/4P3/4K3 w - -', 'e2', 'e4', 'P');
     expect(result).toBe('4k3/8/8/8/4P3/8/8/4K3 w - - 0 1');
+  });
+});
+
+describe('parsePgnTree', () => {
+  test('a blank PGN gives an empty root, not null', () => {
+    const root = parsePgnTree('');
+    expect(root).not.toBeNull();
+    expect(root?.children).toEqual([]);
+    expect(root?.fen).toBe(START_FEN);
+  });
+
+  test('an unparseable PGN gives null', () => {
+    expect(parsePgnTree('not a pgn at all {{{')).toBeNull();
+  });
+
+  test('a two-ply PGN gives a two-node line', () => {
+    const root = parsePgnTree('1. e4 e5');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    expect(root.children).toHaveLength(1);
+    expect(root.children[0].san).toBe('e4');
+    expect(root.children[0].children).toHaveLength(1);
+    expect(root.children[0].children[0].san).toBe('e5');
+  });
+});
+
+describe('mainLine', () => {
+  test('an empty root has an empty main line', () => {
+    expect(mainLine(createRoot())).toEqual([]);
+  });
+
+  test('follows the first child at each step and ignores variations', () => {
+    const root = parsePgnTree('1. e4 (1. d4) e5 2. Nf3');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    expect(mainLine(root).map((n) => n.san)).toEqual(['e4', 'e5', 'Nf3']);
   });
 });
