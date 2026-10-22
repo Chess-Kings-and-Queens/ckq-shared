@@ -32,6 +32,12 @@ export interface AcademyStandards {
   practiceHoursPerWeek?: number;
 }
 
+/** GET /student-activity/board-preferences — backend studentActivity.service.js getBoardPreferences. */
+export interface BoardPreferences {
+  /** Show legal-move dots when a piece is picked up. False for students above Pawn 1. */
+  showMoveHints: boolean;
+}
+
 export type LevelUpMetricKey =
   | 'attendance' | 'hwCoverage' | 'hwScore' | 'missions' | 'tournamentsOtb'
   | 'uscf' | 'tournamentsOnline' | 'champion' | 'wbCompletion' | 'wbScore';
