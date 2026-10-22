@@ -228,6 +228,11 @@ export type PuzzleAttemptEvent =
    */
   | { type: 'CONTINUE' };
 
+/** How long the brief "correct" check shows after a correct mid-sequence move,
+ *  in ms. Short so the board is visible again right after the opponent's reply
+ *  (owner decision 2026-10-21, board-feedback-and-level-gated-move-hints-plan.md D1). */
+export const BRIEF_CORRECT_OVERLAY_MS = 500;
+
 /**
  * Side-effect intents this reducer emits. The reducer decides what SHOULD
  * happen; a caller-supplied adapter owns the actual `setTimeout`, DB write,
@@ -376,7 +381,7 @@ function handlePlayerMove(
     return {
       state: { ...state, phase: 'brief-correct', moves },
       effects: [
-        { type: 'SCHEDULE', kind: 'clear-brief', delayMs: 2000 }, // line 262
+        { type: 'SCHEDULE', kind: 'clear-brief', delayMs: BRIEF_CORRECT_OVERLAY_MS }, // line 262
         { type: 'SCHEDULE', kind: 'opponent-reply', delayMs: 400, opponentSan: event.opponentSan }, // lines 263-267
       ],
     };

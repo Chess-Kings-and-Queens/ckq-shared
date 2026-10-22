@@ -2,6 +2,7 @@ import {
   initPuzzleAttemptState,
   reducePuzzleAttempt,
   PuzzleAttemptState,
+  BRIEF_CORRECT_OVERLAY_MS,
 } from '../puzzleAttemptReducer';
 
 // Helper: build a "playing, mid-timer" state directly, without going through
@@ -381,7 +382,7 @@ describe('item 4 — player move: mid-sequence correct (brief-correct)', () => {
     expect(next.phase).toBe('brief-correct');
     expect(next.moves).toEqual(['e4', 'e5']);
     expect(effects).toEqual([
-      { type: 'SCHEDULE', kind: 'clear-brief', delayMs: 2000 },
+      { type: 'SCHEDULE', kind: 'clear-brief', delayMs: BRIEF_CORRECT_OVERLAY_MS },
       { type: 'SCHEDULE', kind: 'opponent-reply', delayMs: 400, opponentSan: 'Nf3' },
     ]);
   });
@@ -553,4 +554,8 @@ describe('item 7 — Continue', () => {
     expect(next).toEqual(state);
     expect(effects).toEqual([]);
   });
+});
+
+it('BRIEF_CORRECT_OVERLAY_MS is 500 ms', () => {
+  expect(BRIEF_CORRECT_OVERLAY_MS).toBe(500);
 });
