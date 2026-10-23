@@ -1,5 +1,5 @@
 import { tokens } from './tokens';
-import type { HomeworkReport, HomeworkStatus } from './types/homework';
+import type { HomeworkPositionStatus, HomeworkStatus } from './types/homework';
 import type { Mission } from './types/missions';
 import type { GameTimelineRow } from './types/studentGames';
 import type { JoinState, RoundStatus } from './types/tournamentResults';
@@ -34,7 +34,7 @@ export function toneColors(tone: Tone): { bg: string; fg: string } {
   }
 }
 
-type PositionStatus = HomeworkReport['positions'][string]['status'];
+type PositionStatus = HomeworkPositionStatus;
 type GameOutcome = NonNullable<GameTimelineRow['outcome']>;
 
 export const homeworkStatusDisplay: Record<HomeworkStatus, StatusDisplay> = {
@@ -55,8 +55,6 @@ export const positionStatusDisplay: Record<PositionStatus, StatusDisplay> = {
   correct: { label: '✓', tone: 'success' },
   incorrect: { label: '✕', tone: 'danger' },
   not_attempted: { label: '–', tone: 'neutral' },
-  // Legacy generateHomeworkReport() string (with a space) — still real backend output.
-  'not attempted': { label: '–', tone: 'neutral' },
 };
 
 export const gameOutcomeDisplay: Record<GameOutcome, StatusDisplay> = {

@@ -29,11 +29,10 @@ describe('status display maps', () => {
     });
   });
 
-  it('maps every position status, including the legacy "not attempted" string', () => {
+  it('maps every position status', () => {
     expect(positionStatusDisplay.correct).toEqual({ label: '✓', tone: 'success' });
     expect(positionStatusDisplay.incorrect).toEqual({ label: '✕', tone: 'danger' });
     expect(positionStatusDisplay.not_attempted).toEqual({ label: '–', tone: 'neutral' });
-    expect(positionStatusDisplay['not attempted']).toEqual({ label: '–', tone: 'neutral' });
   });
 
   it('maps every game outcome', () => {

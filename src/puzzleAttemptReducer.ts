@@ -122,32 +122,21 @@ export interface PuzzleAttemptState {
    *  Reset to `[]` on retry (line 113); never reset on an opponent-reply or
    *  mid-sequence transition. */
   moves: string[];
-  /** The position's full timer duration in seconds, or null if untimed.
-   *  Immutable for this state's whole lifetime (including across retries) —
-   *  a `RETRY_RESET` restores `secondsLeft` to exactly this value, NOT to any
-   *  `initialTimeRemaining`/resume value (`PuzzleBoard.tsx` line 111 vs the
-   *  `effectiveStart` computation at line 71 — resume time only ever applies
-   *  once, on the very first mount). */
+  /** The position's full timer duration in seconds, or null if untimed. Immutable for this state's whole lifetime: a RETRY_RESET restores secondsLeft to exactly this value. */
   readonly timeLimit: number | null;
 }
 
 /**
- * Builds the initial state for a freshly mounted puzzle. Mirrors
- * `effectiveStart = initialTimeRemaining ?? timeLimit` and
- * `useState<number | null>(effectiveStart)` (`PuzzleBoard.tsx` lines 71-72).
+ * Builds the initial state for a freshly mounted puzzle: the full `timeLimit` on the clock and no
+ * moves. A resumed position is not seeded here: the server's `open` answer (`secondsRemaining`)
+ * is the only resume source and the host applies it after mount (ADR backend-029).
  *
  * @param timeLimit Seconds per attempt, or null for untimed (workbook).
- * @param initialTimeRemaining Seconds to resume from (persisted timer from an
- *   earlier session) — only ever relevant for the very first attempt on a
- *   position, never a retry. Omit/null to start from the full `timeLimit`.
  */
-export function initPuzzleAttemptState(
-  timeLimit: number | null,
-  initialTimeRemaining?: number | null,
-): PuzzleAttemptState {
+export function initPuzzleAttemptState(timeLimit: number | null): PuzzleAttemptState {
   return {
     phase: 'playing',
-    secondsLeft: initialTimeRemaining ?? timeLimit,
+    secondsLeft: timeLimit,
     moves: [],
     timeLimit,
   };
@@ -439,7 +428,7 @@ function handleRetryReset(state: PuzzleAttemptState): PuzzleAttemptTransition {
     state: {
       ...state,
       phase: 'playing',
-      secondsLeft: state.timeLimit, // line 111 — the full timeLimit, NOT initialTimeRemaining
+      secondsLeft: state.timeLimit, // the full timeLimit
       moves: [], // line 113
     },
     effects: [],

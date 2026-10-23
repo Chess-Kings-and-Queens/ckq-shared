@@ -1,7 +1,6 @@
 import {
   computeStrikesLeft,
   formatRushThreshold,
-  computeResumePoint,
   shouldShowExitWarning,
   hasAttemptsRemaining,
   resolveEffectiveMaxAttempts,
@@ -47,29 +46,6 @@ describe('formatRushThreshold', () => {
 
   test('boundary: just under 60 seconds still formats as seconds', () => {
     expect(formatRushThreshold(19, 300)).toBe('57 sec');
-  });
-});
-
-describe('computeResumePoint', () => {
-  test('normal case: resumes at the completed count with remaining time', () => {
-    expect(computeResumePoint(2, 30, 180)).toEqual({
-      initialPuzzleIdx: 2,
-      initialTimeRemaining: 150,
-    });
-  });
-
-  test('boundary: time spent exceeding the limit clamps remaining time to 0', () => {
-    expect(computeResumePoint(0, 200, 180)).toEqual({
-      initialPuzzleIdx: 0,
-      initialTimeRemaining: 0,
-    });
-  });
-
-  test('no time spent yet leaves the full time limit remaining', () => {
-    expect(computeResumePoint(0, 0, 180)).toEqual({
-      initialPuzzleIdx: 0,
-      initialTimeRemaining: 180,
-    });
   });
 });
 

@@ -44,31 +44,6 @@ export function formatRushThreshold(minThinkTimePct: number, timeLimit: number):
   return s === 0 ? `${m} min` : `${m}m ${s}s`;
 }
 
-export interface ResumePoint {
-  initialPuzzleIdx: number;
-  initialTimeRemaining: number;
-}
-
-/**
- * Computes where a student resumes an in-progress homework set: which
- * position to start on, and how much time remains on the timer. Ported
- * verbatim from the homework-report page's `handleCompleteHomework`
- * (`page.tsx` lines 108-115). `timeSpentSeconds` is the previously-persisted
- * elapsed time on the current position (see homework.md's "Timer rules" >
- * "Persistence" — this only ever applies to Attempt 1 with no move made yet;
- * the caller is responsible for only invoking this in that scenario).
- */
-export function computeResumePoint(
-  completedCount: number,
-  timeSpentSeconds: number,
-  timeLimit: number,
-): ResumePoint {
-  return {
-    initialPuzzleIdx: completedCount,
-    initialTimeRemaining: Math.max(0, timeLimit - timeSpentSeconds),
-  };
-}
-
 /**
  * Whether the "leave homework?" confirmation dialog should be shown when the
  * student tries to close the puzzle dialog mid-position. Ported verbatim from

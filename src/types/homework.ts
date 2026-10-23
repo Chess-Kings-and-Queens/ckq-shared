@@ -1,83 +1,54 @@
-// ── Domain types ─────────────────────────────────────────────────────────────
+// ── Homework API contract ────────────────────────────────────────────────────
 //
-// Extracted from website2.0's src/app/services/homework/index.ts. Pure API
-// contract shapes only — validated against backend/src/services/homework.service.js
-// (getReport, getPuzzleContent, getLessonContent) and
-// backend/src/services/homeworkResult.service.js (createResult, submitMove,
-// pauseTimer) + backend/src/services/behavior.service.js (getStrikeStatus).
-// Fields that the backend always sets but that no current frontend consumer
-// reads are still modeled optional here (rather than widened with `any`) to
-// keep this a living, low-friction contract — see the
-// `HomeworkReport.homework.status` doc comment below for the one confirmed gap.
+// Validated field by field against backend-2.0 on 2026-10-23
+// (docs/plans/homework-types-and-pathways-plan.md §5.2): homework.service.js
+// getReport / getPuzzleContent / getLessonContent / getProgress,
+// homeworkResult.service.js createResult / submitMove / openPosition / pauseTimer,
+// behavior.service.js getStrikeStatus.
+//
+// The rule: a field is modelled only when the backend sends it AND website2.0 or
+// ckq-mobile reads it. A field sent on every response is required. A field sent on
+// some responses only is optional and its comment names the branch. Fields the
+// backend sends that no consumer reads are not modelled; adding one needs a reader.
 
-interface HomeworkPositionReport {
-  score?: number;
-  /** Legacy generateHomeworkReport() uses 'not attempted' (space); the newer
-   *  buildPositionReport() uses 'not_attempted' (underscore) — both are real,
-   *  pre-existing backend strings (homeworkUtils.js line 136 vs homework.service.js
-   *  line 77). The frontend never distinguishes them (HomeworkReportView.tsx only
-   *  checks for 'correct' | 'incorrect'), so both are modeled here rather than
-   *  "fixed" — that's backend runtime code, out of scope for this pass. */
-  timeSpent?: number | null;
-  answer?: string[] | string;
-  status: "correct" | "incorrect" | "not_attempted" | "not attempted";
+export type HomeworkStatus = "not_started" | "in_progress" | "completed";
+
+export type HomeworkPositionStatus = "correct" | "incorrect" | "not_attempted";
+
+/** One entry of GET /homework/report `positions`, keyed "0".."noOfGames-1" (homeworkUtils.js buildPositionReport). */
+export interface HomeworkPositionReport {
+  /** Best attempt's points for this position; 0 when not attempted. */
+  score: number;
+  /** Best attempt's score as 0-100 (the stored bestScore); 0 when not attempted. Drives the report's per-position colour. */
+  scorePct: number;
+  /** Sum of the attempts' server-measured seconds; null when not attempted. */
+  timeSpent: number | null;
+  status: HomeworkPositionStatus;
 }
 
-interface HomeworkReportMaterialCollectionRef {
-  _id?: string;
-  title?: string;
-  /** Max attempts per position — populated by `GET /homework/report` since backend #1104. */
-  maxAttempts: number;
-}
-
+/** GET /homework/report (homework.service.js getReport). Both branches send every field. */
 export interface HomeworkReport {
   homework: {
-    _id?: string;
     noOfGames: number;
-    maxScore?: number;
-    timeLimit?: number;
-    createdAt?: string;
-    materialCollection?: HomeworkReportMaterialCollectionRef | null;
-    /**
-     * The material result's status, copied onto the report by getReport()'s
-     * materialCollection branch (backend fix 2026-07-09 — previously never sent,
-     * which left the report page's "Completed" button state permanently inactive).
-     * "not_started" when no HomeworkResult exists yet (backend synthesizes this
-     * default directly — see homework.service.js's getReport). Enum mirrors
-     * homeworkResult.model.js.
-     */
-    status?: "not_started" | "in_progress" | "completed";
+    /** Seconds per position (Homework.timeLimit, required with a default). */
+    timeLimit: number;
+    createdAt: string;
+    /** Populated `title maxAttempts`; null for a legacy homework with no collection. */
+    materialCollection: { title: string; maxAttempts: number } | null;
+    /** The material result's status, or "not_started" when no HomeworkResult exists. */
+    status: HomeworkStatus;
   };
-  score?: number;
-  maxScore?: number;
-  /** Only present on the materialCollection+HomeworkResult branch (`matResult.score`). */
-  scorePct?: number;
-  timeSpent?: number;
-  maxTime?: number;
-  lesson?: string | null;
-  student?: string;
+  score: number;
+  maxScore: number;
+  scorePct: number;
+  timeSpent: number;
+  /** The collection title; null for a legacy homework with no collection. */
+  lesson: string | null;
+  /** Never empty: one entry per position (Homework.noOfGames is at least 1). */
   positions: Record<string, HomeworkPositionReport>;
 }
 
-/** getProgress() aggregation projection in homework.service.js. */
-export interface HomeworkProgressEntry {
-  _id: string;
-  title?: string | null;
-  noOfAnswers: number;
-  noOfGames: number;
-  totalScore: number;
-  maxScore: number;
-  scorePct: number;
-  score?: number;
-  coachName?: string;
-  completionPercentage: number;
-  createdAt: string;
-  /** Only overlaid for materialCollection-linked homework — see getProgress()'s
-   *  HomeworkResult overlay loop in homework.service.js. */
-  status?: "not_started" | "in_progress" | "completed";
-}
-
-/** behaviorService.getStrikeStatus() in backend/src/services/behavior.service.js. */
+/** behavior.service.js getStrikeStatus. */
 export interface HomeworkStrikeStatus {
   activeViolations: number;
   rushViolationsToBlock: number;
@@ -85,107 +56,75 @@ export interface HomeworkStrikeStatus {
   isBlocked: boolean;
 }
 
-/** getPuzzleContent() in homework.service.js spreads getStrikeStatus() onto the
- *  games/totalPositions/timeLimit/maxAttempts payload (`...strikeStatus`). */
+/** GET /homework/:id/puzzle (homework.service.js getPuzzleContent); one success branch. */
 export interface HomeworkPuzzlePayload extends HomeworkStrikeStatus {
-  title?: string;
+  title: string;
   games: string[];
   totalPositions: number;
-  timeLimit?: number;
-  maxAttempts?: number;
-  materialCollectionId?: string;
-  groupClassSessionId?: string | null;
-  homeworkMaterialId?: string;
+  timeLimit: number;
+  maxAttempts: number;
+  materialCollectionId: string;
+  groupClassSessionId: string | null;
+  homeworkMaterialId: string;
 }
 
-/** getLessonContent() in homework.service.js. */
+/** GET /homework/:id/lesson (homework.service.js getLessonContent). pgnContent and videoUrl may be "" for a video-only or PGN-only lesson. */
 export interface LessonContent {
-  title?: string;
+  title: string;
   pgnContent: string;
-  videoUrl?: string;
+  videoUrl: string;
 }
 
-interface HomeworkMaterialResultAnswerAttempt {
-  attemptNumber: number;
-  moves: string[];
-  isCorrect: boolean;
-  score: number;
+export interface HomeworkAnswerAttempt {
+  /** Server-measured seconds, capped at the limit. */
   timeTaken: number;
 }
 
-interface HomeworkMaterialResultAnswer {
+export interface HomeworkPositionAnswer {
   positionIndex: number;
-  attempts: HomeworkMaterialResultAnswerAttempt[];
+  attempts: HomeworkAnswerAttempt[];
+  /** Best attempt's score as 0-100. */
   bestScore: number;
   isCorrect: boolean;
   isCompleted: boolean;
 }
 
-/** materialResults[] subdocument on HomeworkResult — homeworkResult.model.js. */
-interface HomeworkMaterialResult {
-  material?: string;
-  totalPositions?: number;
-  totalPositionsCompleted?: number;
-  status?: "not_started" | "in_progress" | "completed";
-  answers?: HomeworkMaterialResultAnswer[];
-  timeSpentSeconds?: number;
-  correctCount?: number;
-  score?: number | null;
-  totalTimeTaken?: number;
-  startedAt?: string | null;
-  completedAt?: string | null;
-  currentPuzzleStartedAt?: string | null;
+export interface HomeworkMaterialResult {
+  totalPositionsCompleted: number;
+  answers: HomeworkPositionAnswer[];
 }
 
-/** The raw HomeworkResult document — createResult/submitMove/pauseTimer in
- *  homeworkResult.service.js all return this directly (never wrapped in
- *  {status, data}); see homeworkResult.controller.js. */
+/** The raw HomeworkResult document: POST /homework-result (201), the `result` of PUT …/move, and PUT …/pause-timer all return it unwrapped (homeworkResult.controller.js). */
 export interface HomeworkResultRecord {
   _id: string;
-  student?: string;
-  materialCollection?: string;
-  groupClassSession?: string | null;
-  status?: "not_started" | "in_progress" | "completed";
   materialResults: HomeworkMaterialResult[];
-  createdAt?: string;
-  updatedAt?: string;
 }
 
-interface HomeworkRushViolation {
+/** behavior.service.js handleRushDetection; present only when a strike was recorded, so isViolation is always true when the object exists. */
+export interface HomeworkRushViolation {
   isViolation: boolean;
   isBlocked: boolean;
   violationCount: number;
 }
 
-/**
- * submitMove()'s controller response is always `{ result, rushViolation }`
- * (homeworkResult.controller.js `submitMove`) — `result` is never actually
- * omitted in a real response. `status`/`result` are modeled optional here
- * because pre-existing test fixtures only ever set the field(s) they assert on
- * (e.g. `{ rushViolation }` alone, or the unrelated `{ status: "success" }`
- * sentinel some fixtures use as inert filler) — flagged, not corrected, since
- * nothing in the page under test reads `.result` or `.status` off this call.
- */
+/** PUT /homework-result/:id/move success body (homeworkResult.controller.js submitMove). */
 export interface SubmitHomeworkMoveResult {
-  result?: HomeworkResultRecord;
-  rushViolation?: HomeworkRushViolation | null;
-  status?: string;
+  result: HomeworkResultRecord;
+  rushViolation: HomeworkRushViolation | null;
 }
 
+/** Body of POST /homework-result (validation/homeworkResultSchemas.js createResultSchema: null is a 400). */
 export interface CreateHomeworkResultInput {
   materialCollectionId: string;
-  groupClassSessionId?: string | null;
+  groupClassSessionId?: string;
   materials: Array<{ materialId: string; totalPositions: number }>;
 }
 
+/** Body of PUT /homework-result/:id/move. The server grades `moves` and measures the time (ADR backend-024, backend-029); any other key is a 400. */
 export interface SubmitHomeworkMoveInput {
   materialId: string;
   positionIndex: number;
   moves: string[];
-  /** @deprecated Ignored by the backend, which grades the moves itself (ADR backend-024). Omit it. */
-  isCorrect?: boolean;
-  /** @deprecated Ignored by the backend, which grades the moves itself (ADR backend-024). Omit it. */
-  score?: number;
 }
 
 /** Body of PUT /homework-result/:id/open and /workbook-result/:id/open: the server stamps the position start. */
@@ -194,46 +133,38 @@ export interface OpenPositionInput {
   positionIndex: number;
 }
 
+/** Response of `open`: the countdown's only source. 0 means untimed. */
 export interface OpenPositionResult {
   timeLimit: number;
   secondsRemaining: number;
-  serverNow: string;
-  attemptNumber: number;
 }
 
 export interface PauseHomeworkTimerInput {
   materialId: string;
 }
 
-// Authoritative homework status vocabulary — mirrors the HomeworkResult enum
-// (backend/src/models/homeworkResult.model.js). Every /homework/progress row
-// carries one; the backend derives it, the frontend renders it verbatim
-// (Hard Rule #8 — never re-derive from counters).
-export type HomeworkStatus = "not_started" | "in_progress" | "completed";
-
-// Row shape of GET /homework/progress — the getProgress aggregation $project
-// plus the HomeworkResult overlay (backend/src/services/homework.service.js).
+/** Row of GET /homework/progress: the getProgress $project plus the HomeworkResult overlay (homework.service.js). */
 export interface HomeworkRow {
   _id: string;
-  title: string;
-  lessonTitle?: string;
+  /** Collection title, else lesson title; absent or null when both are gone (a deleted collection). */
+  title?: string | null;
   materialCollectionTitle?: string;
   coachName: string;
   groupClassName?: string;
-  totalScore: number;
-  maxScore: number;
   noOfGames: number;
   noOfAnswers: number;
   completionPercentage: number;
-  scorePct?: number;
-  timeSpent?: number;
+  scorePct: number;
+  timeSpent: number;
+  /** Backend-derived; rendered verbatim (Hard Rule 8). */
   status: HomeworkStatus;
   createdAt: string;
-  /** Backend-marked "do this next" row (homework.service.js getProgress): the newest in-progress, else the newest not-started. */
-  isNext?: boolean;
+  /** The backend's "do this next" row: the newest in-progress, else the newest not-started. */
+  isNext: boolean;
 }
 
+/** GET /homework/progress envelope; the fetchers throw on error, so only the success shape exists. */
 export interface ProgressReportResponse {
-  status: string;
+  status: "success";
   data: HomeworkRow[];
 }
