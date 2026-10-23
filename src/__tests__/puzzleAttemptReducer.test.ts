@@ -28,15 +28,6 @@ describe('initPuzzleAttemptState', () => {
     });
   });
 
-  test('resume case: initialTimeRemaining overrides the starting secondsLeft, timeLimit unaffected', () => {
-    expect(initPuzzleAttemptState(180, 45)).toEqual({
-      phase: 'playing',
-      secondsLeft: 45,
-      moves: [],
-      timeLimit: 180,
-    });
-  });
-
   test('untimed (workbook) puzzle: timeLimit null yields secondsLeft null', () => {
     expect(initPuzzleAttemptState(null)).toEqual({
       phase: 'playing',
@@ -44,10 +35,6 @@ describe('initPuzzleAttemptState', () => {
       moves: [],
       timeLimit: null,
     });
-  });
-
-  test('initialTimeRemaining of 0 is honored (not treated as falsy/omitted)', () => {
-    expect(initPuzzleAttemptState(180, 0).secondsLeft).toBe(0);
   });
 });
 
@@ -505,11 +492,9 @@ describe('item 6 — retry reset', () => {
   });
 
   test('secondsLeft resets to timeLimit even though the state that entered retry never had a resume value', () => {
-    // Simulate: this puzzle originally resumed from initialTimeRemaining=45 (not part of state
-    // any more since timeLimit is the only persisted duration), ran down, and hit retry.
-    const resumed = initPuzzleAttemptState(180, 45);
+    // Simulate: the state ran down to 1 second, ticked to a timeout, and hit retry.
     const { state: afterTimeout } = reducePuzzleAttempt(
-      { ...resumed, secondsLeft: 1 },
+      { ...initPuzzleAttemptState(180), secondsLeft: 1 },
       { type: 'TICK' },
     );
     expect(afterTimeout.phase).toBe('resolved-incorrect-pending');
@@ -521,7 +506,7 @@ describe('item 6 — retry reset', () => {
     expect(afterDecision.phase).toBe('resolved-incorrect-retry');
 
     const { state: afterReset } = reducePuzzleAttempt(afterDecision, { type: 'RETRY_RESET' });
-    // Must be the full 180, never 45.
+    // Must be the full 180.
     expect(afterReset.secondsLeft).toBe(180);
   });
 
