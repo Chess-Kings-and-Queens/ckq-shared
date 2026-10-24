@@ -1,4 +1,4 @@
-import { createRoot, buildTreeFromPgn, movePieceInFen, parsePgnTree, mainLine } from '../moveTree';
+import { createRoot, buildTreeFromPgn, movePieceInFen, parsePgnTree, mainLine, type MoveNode } from '../moveTree';
 import { START_FEN } from '../chessUtils';
 
 describe('createRoot', () => {
@@ -143,6 +143,51 @@ describe('parsePgnTree', () => {
     expect(root.children[0].san).toBe('e4');
     expect(root.children[0].children).toHaveLength(1);
     expect(root.children[0].children[0].san).toBe('e5');
+  });
+});
+
+describe('parsePgnTree — node ids (pgn-tree-unique-node-ids-plan.md D1)', () => {
+  // Two sibling variations open with the same move at two different points.
+  const SAME_MOVE_SIBLINGS =
+    '1. e4 e5 2. Nf3 (2. Nc3 Nc6 3. f4) (2. Nc3 Nf6 3. Bc4) 2... Nc6 (2... Nf6 3. Nxe5) (2... Nf6 3. Nc3) 3. Bb5 a6 *';
+
+  const allNodes = (node: MoveNode): MoveNode[] => [node, ...node.children.flatMap(allNodes)];
+
+  test('sibling variations that open with the same move get distinct ids', () => {
+    const root = parsePgnTree(SAME_MOVE_SIBLINGS);
+    expect(root).not.toBeNull();
+    if (!root) return;
+    const e5 = root.children[0].children[0];
+    expect(e5.children.map((c) => c.san)).toEqual(['Nf3', 'Nc3', 'Nc3']);
+    expect(e5.children[1].id).not.toBe(e5.children[2].id);
+  });
+
+  test('every id in a parsed tree is unique', () => {
+    const root = parsePgnTree(SAME_MOVE_SIBLINGS);
+    expect(root).not.toBeNull();
+    if (!root) return;
+    const ids = allNodes(root).map((n) => n.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(root.id).toBe('root');
+  });
+
+  test('ids follow the build order: a move, then its variations in full, then the main continuation', () => {
+    const root = parsePgnTree('1. e4 e5 2. Nf3 (2. Nc3) Nc6');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    expect(root.id).toBe('root');
+    expect(mainLine(root).map((n) => n.id)).toEqual(['pgn-1', 'pgn-2', 'pgn-3', 'pgn-5']);
+    const e5 = root.children[0].children[0];
+    expect(e5.children.map((n) => n.id)).toEqual(['pgn-3', 'pgn-4']);
+  });
+
+  test('the same PGN parses to the same ids every time', () => {
+    const first = parsePgnTree(SAME_MOVE_SIBLINGS);
+    const second = parsePgnTree(SAME_MOVE_SIBLINGS);
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+    if (!first || !second) return;
+    expect(allNodes(first).map((n) => n.id)).toEqual(allNodes(second).map((n) => n.id));
   });
 });
 
