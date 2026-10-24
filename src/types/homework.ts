@@ -44,6 +44,8 @@ export interface HomeworkReport {
   timeSpent: number;
   /** The collection title; null for a legacy homework with no collection. */
   lesson: string | null;
+  /** The homework's student id (both getReport branches send it). Read by website2.0's admin homework page to send Back to the student's profile. */
+  student: string;
   /** Never empty: one entry per position (Homework.noOfGames is at least 1). */
   positions: Record<string, HomeworkPositionReport>;
 }
