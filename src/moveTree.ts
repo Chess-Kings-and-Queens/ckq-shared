@@ -8,6 +8,12 @@ import { fenFields, fenFromFields } from './fen';
 // rest — chessground config, promotion UI state, navigation callbacks). This is
 // the pure variation-tree model: build it from a PGN, walk it, mutate it.
 
+/**
+ * One node of the variation tree. `id` is unique within its tree: consumers use
+ * it as the React key of a notation token and as the cursor identity
+ * (`node.id === currentNodeId`), so two nodes must never share one
+ * (pgn-tree-unique-node-ids-plan.md D1/D2).
+ */
 export interface MoveNode {
   id: string;
   san: string;
@@ -40,10 +46,15 @@ export function parsePgnTree(pgn: string): MoveNode | null {
     const startFen = reader.setToStart();
     const root = createRoot(startFen);
 
-    const buildLine = (parentNode: MoveNode, move: any): void => {
+    // Pre-order counter: ids were `pgn-<depth>-<san>`, so two sibling
+    // variations opening with the same move shared an id and the notation
+    // panel kept one of them on screen after the next game loaded (D1).
+    let seq = 0;
+    const buildLine = (parentNode: MoveNode, move: any): void => { // pgn-reader's untyped move object
       if (!move?.fen) return;
+      seq += 1;
       const child: MoveNode = {
-        id: `pgn-${parentNode.depth}-${move.notation?.notation ?? move.index ?? parentNode.depth}`,
+        id: `pgn-${seq}`,
         san: move.notation?.notation ?? '',
         fen: move.fen,
         from: move.from ?? '',
