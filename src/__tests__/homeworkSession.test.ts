@@ -2,9 +2,6 @@ import {
   computeStrikesLeft,
   formatRushThreshold,
   shouldShowExitWarning,
-  hasAttemptsRemaining,
-  resolveEffectiveMaxAttempts,
-  recordAttemptAndShouldAdvance,
   computeTimeTaken,
 } from '../homeworkSession';
 
@@ -64,93 +61,6 @@ describe('shouldShowExitWarning', () => {
 
   test('both conditions true still shows the warning', () => {
     expect(shouldShowExitWarning(true, 2)).toBe(true);
-  });
-});
-
-describe('hasAttemptsRemaining', () => {
-  test('normal case: attempts used below the max leaves attempts remaining', () => {
-    expect(hasAttemptsRemaining(1, 3)).toBe(true);
-  });
-
-  test('boundary: a position never attempted before (0 used) has attempts remaining', () => {
-    expect(hasAttemptsRemaining(0, 3)).toBe(true);
-  });
-
-  test('boundary: attempts used equal to the max has none remaining', () => {
-    expect(hasAttemptsRemaining(3, 3)).toBe(false);
-  });
-
-  test('attempts used exceeding the max has none remaining', () => {
-    expect(hasAttemptsRemaining(4, 3)).toBe(false);
-  });
-});
-
-describe('resolveEffectiveMaxAttempts', () => {
-  test('normal case: a new position with a pending block gets reduced to 1 attempt, clearing the pending flag', () => {
-    expect(resolveEffectiveMaxAttempts(true, true, 3)).toEqual({
-      maxAttempts: 1,
-      pendingBlock: false,
-    });
-  });
-
-  test('boundary: pendingBlock true but NOT a new position must not apply the block yet', () => {
-    expect(resolveEffectiveMaxAttempts(false, true, 3)).toEqual({
-      maxAttempts: 3,
-      pendingBlock: true,
-    });
-  });
-
-  test('a new position with no pending block is unaffected', () => {
-    expect(resolveEffectiveMaxAttempts(true, false, 3)).toEqual({
-      maxAttempts: 3,
-      pendingBlock: false,
-    });
-  });
-
-  test('not a new position and no pending block is unaffected', () => {
-    expect(resolveEffectiveMaxAttempts(false, false, 3)).toEqual({
-      maxAttempts: 3,
-      pendingBlock: false,
-    });
-  });
-});
-
-describe('recordAttemptAndShouldAdvance', () => {
-  test('normal case: a position never attempted before increments from 0 to 1', () => {
-    const result = recordAttemptAndShouldAdvance({}, 0, false, 3);
-    expect(result.attemptsUsed).toEqual({ 0: 1 });
-    expect(result.shouldAdvanceIndex).toBe(false);
-  });
-
-  test('correct answer always advances, even on the first attempt', () => {
-    const result = recordAttemptAndShouldAdvance({}, 0, true, 3);
-    expect(result.attemptsUsed).toEqual({ 0: 1 });
-    expect(result.shouldAdvanceIndex).toBe(true);
-  });
-
-  test('wrong answer that exhausts max attempts advances', () => {
-    const result = recordAttemptAndShouldAdvance({ 0: 2 }, 0, false, 3);
-    expect(result.attemptsUsed).toEqual({ 0: 3 });
-    expect(result.shouldAdvanceIndex).toBe(true);
-  });
-
-  test('wrong answer with attempts remaining does not advance', () => {
-    const result = recordAttemptAndShouldAdvance({ 0: 1 }, 0, false, 3);
-    expect(result.attemptsUsed).toEqual({ 0: 2 });
-    expect(result.shouldAdvanceIndex).toBe(false);
-  });
-
-  test('does not mutate the input object (pure function)', () => {
-    const input = { 0: 1 };
-    const result = recordAttemptAndShouldAdvance(input, 0, false, 3);
-    expect(input).toEqual({ 0: 1 });
-    expect(result.attemptsUsed).not.toBe(input);
-  });
-
-  test('tracks multiple positions independently', () => {
-    const input = { 0: 3 };
-    const result = recordAttemptAndShouldAdvance(input, 1, true, 3);
-    expect(result.attemptsUsed).toEqual({ 0: 3, 1: 1 });
   });
 });
 

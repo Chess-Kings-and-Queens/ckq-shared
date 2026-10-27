@@ -44,12 +44,14 @@ import { computeTimeTaken } from './homeworkSession';
 //                                    been made yet. Entered directly from
 //                                    'playing'/'brief-correct' the instant an
 //                                    incorrect outcome (move or timeout) is
-//                                    recorded; always resolved synchronously,
-//                                    in the same tick, by a follow-up
+//                                    recorded; resolved by a follow-up
 //                                    `RETRY_DECISION` event — see "The
 //                                    `canRetry` external input" below for why
-//                                    this two-step split exists. Not meant to
-//                                    ever be visibly rendered by an adapter.
+//                                    this two-step split exists. Under the
+//                                    homework's server-ordered flow the adapter
+//                                    dispatches `RETRY_DECISION` after the
+//                                    server's answer and renders the incorrect
+//                                    overlay meanwhile.
 //   'resolved-incorrect-retry'    — `quizDone && quizResult === 'incorrect'
 //                                    && autoRetrying === true`.
 //   'resolved-incorrect-final'    — `quizDone && quizResult === 'incorrect'
@@ -66,9 +68,8 @@ import { computeTimeTaken } from './homeworkSession';
 // "Is a retry available for this position" (`onShouldRetry(puzzleNumber - 1)`
 // in the original, called at lines 167 and 251) depends on state that lives
 // entirely outside a single position's component — the parent homework page's
-// attempts-used/max-attempts bookkeeping (`@ckq/shared`'s
-// `hasAttemptsRemaining`, already extracted in Phase 3a — see
-// `homeworkSession.ts`). Critically, that bookkeeping is itself mutated by the
+// attempts-used/max-attempts bookkeeping (workbook) or the server's
+// `positionDone` (homework). Critically, that bookkeeping is itself mutated by the
 // `RECORD` effect below (the parent's DB-write callback increments the
 // attempts-used count and may cut `maxAttempts` for a rush-block) — so
 // `canRetry` can only be correctly computed AFTER `RECORD` has fired, not
