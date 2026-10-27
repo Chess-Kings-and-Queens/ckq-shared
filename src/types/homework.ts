@@ -94,6 +94,8 @@ export interface HomeworkPositionAnswer {
 export interface HomeworkMaterialResult {
   totalPositionsCompleted: number;
   answers: HomeworkPositionAnswer[];
+  /** First unfinished position (D1); null when every position is done. Computed by the server, never stored. */
+  nextPositionIndex: number | null;
 }
 
 /** The raw HomeworkResult document: POST /homework-result (201), the `result` of PUT …/move, and PUT …/pause-timer all return it unwrapped (homeworkResult.controller.js). */
@@ -113,6 +115,10 @@ export interface HomeworkRushViolation {
 export interface SubmitHomeworkMoveResult {
   result: HomeworkResultRecord;
   rushViolation: HomeworkRushViolation | null;
+  positionDone: boolean;
+  attemptsLeft: number;
+  nextPositionIndex: number | null;
+  duplicate?: true;
 }
 
 /** Body of POST /homework-result (validation/homeworkResultSchemas.js createResultSchema: null is a 400). */
@@ -127,6 +133,8 @@ export interface SubmitHomeworkMoveInput {
   materialId: string;
   positionIndex: number;
   moves: string[];
+  /** The attempt being answered, from `open`; makes a resend idempotent (D5). */
+  attemptNumber?: number;
 }
 
 /** Body of PUT /homework-result/:id/open and /workbook-result/:id/open: the server stamps the position start. */
@@ -139,6 +147,20 @@ export interface OpenPositionInput {
 export interface OpenPositionResult {
   timeLimit: number;
   secondsRemaining: number;
+}
+
+/** Homework `open` response: the clock plus the server's attempt for this position (D8). Workbook `open` returns only OpenPositionResult. */
+export interface HomeworkOpenPositionResult extends OpenPositionResult {
+  attemptNumber: number;
+  attemptsAllowed: number;
+}
+
+/** 409 body of homework `open`/`move` when the posted position is not the next one, or `open` just used up its last attempt (D6). */
+export interface HomeworkPositionConflictBody {
+  status: "error";
+  message: "position-out-of-order" | "max_attempts_reached";
+  code: 409;
+  nextPositionIndex: number | null;
 }
 
 export interface PauseHomeworkTimerInput {
