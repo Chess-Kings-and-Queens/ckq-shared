@@ -29,6 +29,7 @@ const climber = (overrides: Partial<TrailClimber>): TrailClimber => ({
   total: 700,
   rank: 1,
   isMe: false,
+  canOpenActivity: false,
   ...overrides,
 });
 
