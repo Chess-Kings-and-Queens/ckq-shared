@@ -206,3 +206,21 @@ export interface PlayerResults {
   standing: StandingsRow | null;
   games: PlayerGame[];
 }
+
+/**
+ * GET /liveboard-tournament/view/:token — a finished tournament game by its watch token (public).
+ * Names are as stored (full names); the results routes shorten names for students and parents.
+ */
+export interface TournamentGameByViewToken {
+  round: number;
+  white: { id: string; name: string };
+  black: { id: string; name: string };
+  pgn: string;
+  moveCount: number;
+  result: TournamentGameResult;
+  resultReason: string | null;
+  clocksFinal: { whiteMs: number | null; blackMs: number | null };
+  startFen: string | null;
+  startedAt: string;
+  endedAt: string;
+}
