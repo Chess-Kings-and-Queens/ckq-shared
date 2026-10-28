@@ -66,6 +66,8 @@ export interface TrailClimber {
   total: number;
   rank: number;
   isMe: boolean;
+  /** The requester may open this student's points activity (GET /trail/activity/:id). The staff Trail makes the name a button. */
+  canOpenActivity: boolean;
 }
 
 export type TrailCategoryKey =
@@ -117,7 +119,7 @@ export interface TrailCategory {
   key: TrailCategoryKey;
   label: string;
   icon: string;
-  leaders: { studentId: string; name: string; points: number; isMe: boolean }[];
+  leaders: { studentId: string; name: string; points: number; isMe: boolean; canOpenActivity: boolean }[];
   me: { rank: number; points: number; capped: boolean } | null;
 }
 
