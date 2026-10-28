@@ -183,6 +183,14 @@ export interface ViewTokenResponse {
   currentFen?: string;
   pgn?: string;
   moveCount?: number;
+  /**
+   * The server-held game: a self-paced attempt's state; null for an in-class (liveboard) or
+   * pre-server-owned attempt, which replays from `pgn`. Sent to staff, the parent, the anonymous
+   * snapshot and (since v0.23.0) the attempt's owner.
+   */
+  game?: MissionGameState | null;
+  /** The owner's side (owner response only): the class config in class, the material's orientation otherwise. */
+  playerColor?: 'white' | 'black' | null;
 }
 
 // ── Practice games (My Games → Practice Games tab) ─────────────────────────────
