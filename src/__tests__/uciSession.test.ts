@@ -40,14 +40,14 @@ describe('UciSession — handshake', () => {
 
   test('runs the full handshake in order: uciok → setoption/ucinewgame/isready → readyok → ready', () => {
     const fake = makeFakeTransport();
-    const session = new UciSession(fake.transport, { skillLevel: 15 });
+    const session = new UciSession(fake.transport, { level: 15 });
 
     expect(session.isReady).toBe(false);
 
     fake.emit('uciok');
     expect(fake.sent).toEqual([
       'uci',
-      'setoption name Skill Level value 15',
+      'setoption name Skill Level value 16',
       'ucinewgame',
       'isready',
     ]);
@@ -57,7 +57,7 @@ describe('UciSession — handshake', () => {
     expect(session.isReady).toBe(true);
   });
 
-  test('defaults skill level to 20', () => {
+  test('defaults level to 20 (sends Skill Level 20)', () => {
     const fake = makeFakeTransport();
     new UciSession(fake.transport);
     fake.emit('uciok');
@@ -77,7 +77,7 @@ describe('UciSession — handshake', () => {
 describe('UciSession — startReady (preloaded/warm engine)', () => {
   test('sends only setoption (no "uci") and is ready immediately', () => {
     const fake = makeFakeTransport();
-    const session = new UciSession(fake.transport, { skillLevel: 12, startReady: true });
+    const session = new UciSession(fake.transport, { level: 12, startReady: true });
     expect(fake.sent).toEqual(['setoption name Skill Level value 12']);
     expect(session.isReady).toBe(true);
   });
@@ -86,9 +86,36 @@ describe('UciSession — startReady (preloaded/warm engine)', () => {
     const fake = makeFakeTransport();
     const session = new UciSession(fake.transport, { startReady: true });
     fake.sent.length = 0;
-    session.fireSearch(START_FEN, 500);
-    expect(fake.sent).toEqual([`position fen ${START_FEN}`, 'go movetime 500']);
+    session.fireSearch(START_FEN);
+    expect(fake.sent).toEqual([`position fen ${START_FEN}`, 'go movetime 1000']);
     expect(session.isThinking).toBe(true);
+  });
+});
+
+describe('UciSession — level limits', () => {
+  test('level 1 on a warm transport sends Skill Level 0, then a depth-1 50 ms search', () => {
+    const fake = makeFakeTransport();
+    const session = new UciSession(fake.transport, { level: 1, startReady: true });
+    expect(fake.sent).toEqual(['setoption name Skill Level value 0']);
+    fake.sent.length = 0;
+    session.fireSearch(START_FEN);
+    expect(fake.sent).toEqual([`position fen ${START_FEN}`, 'go depth 1 movetime 50']);
+  });
+
+  test('a search queued before readyok on level 3 fires the level-3 go command', () => {
+    const fake = makeFakeTransport();
+    const session = new UciSession(fake.transport, { level: 3 });
+    session.fireSearch(START_FEN);
+    fake.emit('uciok');
+    fake.emit('readyok');
+    expect(fake.sent).toContain('go depth 2 movetime 100');
+  });
+
+  test('level 25 is clamped to 20 (Skill Level 20) in the handshake', () => {
+    const fake = makeFakeTransport();
+    new UciSession(fake.transport, { level: 25 });
+    fake.emit('uciok');
+    expect(fake.sent).toContain('setoption name Skill Level value 20');
   });
 });
 
@@ -96,7 +123,7 @@ describe('UciSession — fireSearch queueing', () => {
   test('a search fired before the handshake completes is queued, not sent immediately', () => {
     const fake = makeFakeTransport();
     const session = new UciSession(fake.transport);
-    session.fireSearch(START_FEN, 500);
+    session.fireSearch(START_FEN);
     expect(fake.sent).not.toContain(`position fen ${START_FEN}`);
     expect(session.isThinking).toBe(false);
   });
@@ -104,11 +131,11 @@ describe('UciSession — fireSearch queueing', () => {
   test('the queued search fires automatically once ready', () => {
     const fake = makeFakeTransport();
     const session = new UciSession(fake.transport);
-    session.fireSearch(START_FEN, 500);
+    session.fireSearch(START_FEN);
     fake.emit('uciok');
     fake.emit('readyok');
     expect(fake.sent).toContain(`position fen ${START_FEN}`);
-    expect(fake.sent).toContain('go movetime 500');
+    expect(fake.sent).toContain('go movetime 1000');
     expect(session.isThinking).toBe(true);
   });
 
@@ -117,22 +144,21 @@ describe('UciSession — fireSearch queueing', () => {
     const session = new UciSession(fake.transport);
     const firstFen = START_FEN;
     const secondFen = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
-    session.fireSearch(firstFen, 500);
-    session.fireSearch(secondFen, 800);
+    session.fireSearch(firstFen);
+    session.fireSearch(secondFen);
     fake.emit('uciok');
     fake.emit('readyok');
     expect(fake.sent).not.toContain(`position fen ${firstFen}`);
     expect(fake.sent).toContain(`position fen ${secondFen}`);
-    expect(fake.sent).toContain('go movetime 800');
   });
 
-  test('fires position+go immediately when already ready', () => {
+  test('default level 20 sends an uncapped 1000 ms search (fires position+go immediately when already ready)', () => {
     const fake = makeFakeTransport();
     const session = new UciSession(fake.transport);
     fake.emit('uciok');
     fake.emit('readyok');
     fake.sent.length = 0;
-    session.fireSearch(START_FEN, 1000);
+    session.fireSearch(START_FEN);
     expect(fake.sent).toEqual([`position fen ${START_FEN}`, 'go movetime 1000']);
     expect(session.isThinking).toBe(true);
   });
@@ -150,7 +176,7 @@ describe('UciSession — bestmove', () => {
   test('converts UCI to SAN and invokes onBestMove', () => {
     const onBestMove = jest.fn();
     const { fake, session } = readySession(onBestMove);
-    session.fireSearch(START_FEN, 500);
+    session.fireSearch(START_FEN);
     fake.emit('bestmove e2e4');
     expect(onBestMove).toHaveBeenCalledWith('e4');
     expect(onBestMove).toHaveBeenCalledTimes(1);
@@ -158,7 +184,7 @@ describe('UciSession — bestmove', () => {
 
   test('sets isThinking back to false once bestmove arrives', () => {
     const { fake, session } = readySession(jest.fn());
-    session.fireSearch(START_FEN, 500);
+    session.fireSearch(START_FEN);
     expect(session.isThinking).toBe(true);
     fake.emit('bestmove e2e4');
     expect(session.isThinking).toBe(false);
@@ -167,7 +193,7 @@ describe('UciSession — bestmove', () => {
   test('does not invoke onBestMove for "bestmove (none)"', () => {
     const onBestMove = jest.fn();
     const { fake, session } = readySession(onBestMove);
-    session.fireSearch(START_FEN, 500);
+    session.fireSearch(START_FEN);
     fake.emit('bestmove (none)');
     expect(onBestMove).not.toHaveBeenCalled();
   });
@@ -176,7 +202,7 @@ describe('UciSession — bestmove', () => {
     const onBestMove = jest.fn();
     const { fake, session } = readySession(onBestMove);
     const fenAfterE4 = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
-    session.fireSearch(fenAfterE4, 500);
+    session.fireSearch(fenAfterE4);
     fake.emit('bestmove e7e5');
     expect(onBestMove).toHaveBeenCalledWith('e5');
   });
@@ -188,7 +214,7 @@ describe('UciSession — onThinkingChange', () => {
     const fake = makeFakeTransport();
     const session = new UciSession(fake.transport, { startReady: true, onThinkingChange });
 
-    session.fireSearch(START_FEN, 500);
+    session.fireSearch(START_FEN);
     expect(onThinkingChange).toHaveBeenLastCalledWith(true);
     expect(session.isThinking).toBe(true);
 
@@ -202,7 +228,7 @@ describe('UciSession — onThinkingChange', () => {
     const fake = makeFakeTransport();
     const session = new UciSession(fake.transport, { onThinkingChange });
 
-    session.fireSearch(START_FEN, 500);
+    session.fireSearch(START_FEN);
     expect(onThinkingChange).not.toHaveBeenCalled();
     expect(session.isThinking).toBe(false);
 
@@ -218,7 +244,7 @@ describe('UciSession — onThinkingChange', () => {
     const fake = makeFakeTransport();
     const session = new UciSession(fake.transport, { startReady: true, onBestMove, onThinkingChange });
 
-    session.fireSearch(START_FEN, 500);
+    session.fireSearch(START_FEN);
     fake.emit('bestmove (none)');
 
     expect(onBestMove).not.toHaveBeenCalled();
@@ -235,7 +261,7 @@ describe('UciSession — onThinkingChange', () => {
     // e2e5 is illegal from the start position (a pawn cannot move 3 squares) —
     // uciMoveToSan fails to convert it, so onBestMove must not fire, but the
     // session must still leave the "thinking" state.
-    session.fireSearch(START_FEN, 500);
+    session.fireSearch(START_FEN);
     fake.emit('bestmove e2e5');
 
     expect(onBestMove).not.toHaveBeenCalled();
