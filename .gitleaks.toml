@@ -1,0 +1,33 @@
+# CKQ secret-scan config. Master copy: chesskq-workspace/.gitleaks.toml.
+# Every CKQ repo carries a byte-identical copy; scripts/secret-scan.sh fails when one differs.
+# Edit only the master, with the owner's approval, then copy it to every repo.
+# The spaces inside the array-of-tables brackets below are deliberate and valid TOML (whitespace
+# around table keys is ignored); they keep the workspace drift check (C4) from reading them as memory links.
+title = "CKQ gitleaks config"
+
+[extend]
+useDefault = true
+
+[[ rules ]]
+id = "credentialed-connection-uri"
+description = "Database or broker connection string with an inline password"
+regex = '''(?i)\b(?:mongodb(?:\+srv)?|postgres(?:ql)?|mysql|rediss?|amqps?)://[^\s:/@'"`]+:([^\s@'"`]{3,})@[^\s/'"`]+'''
+secretGroup = 1
+keywords = ["mongodb", "postgres", "mysql", "redis", "amqp"]
+
+    [[rules.allowlists]]
+    description = "Template passwords in docs and examples"
+    regexTarget = "secret"
+    regexes = ['''^(?:<[^>]+>|\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|password|pass|pwd|x{3,}|\*{3,})$''']
+
+[[ allowlists ]]
+description = "Placeholder values in example and test-setup files (bookkeeping/.env.example, backend jestSetup.js)"
+regexTarget = "match"
+regexes = ['''_placeholder''']
+
+[[ allowlists ]]
+description = "GitHub Actions cache keys (`key:` lines in workflow files) are identifiers, not secrets"
+condition = "AND"
+paths = ['''^\.github/workflows/[^/]+\.ya?ml$''']
+regexTarget = "line"
+regexes = ['''^\s*key:\s''']
