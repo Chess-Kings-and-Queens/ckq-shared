@@ -1,4 +1,5 @@
 import { uciMoveToSan } from './chessUtils';
+import { engineSearchLimits, engineGoCommand } from './engineStrength';
 
 // ── UCI session protocol ───────────────────────────────────────────────────────
 //
@@ -19,8 +20,8 @@ export interface UciTransport {
 }
 
 export interface UciSessionOptions {
-  /** Stockfish skill level 0–20. Default 20 (matches useStockfishOpponent's default). */
-  skillLevel?: number;
+  /** Engine level 1–20 (`engineStrength.ts`). Default 20: today's unbounded 1000 ms search. */
+  level?: number;
   /** Called with the SAN move once the engine responds to a search with `bestmove`. */
   onBestMove?: (san: string) => void;
   /**
@@ -42,7 +43,6 @@ export interface UciSessionOptions {
 
 interface PendingSearch {
   fen: string;
-  movetime: number;
 }
 
 /**
@@ -62,7 +62,8 @@ interface PendingSearch {
  */
 export class UciSession {
   private readonly transport: UciTransport;
-  private readonly skillLevel: number;
+  private readonly level: number;
+  private readonly goCommand: string;
   private readonly onBestMoveCallback: ((san: string) => void) | undefined;
   private readonly onThinkingChangeCallback: ((thinking: boolean) => void) | undefined;
   private readonly unsubscribe: () => void;
@@ -81,12 +82,13 @@ export class UciSession {
 
   constructor(transport: UciTransport, options: UciSessionOptions = {}) {
     this.transport = transport;
-    this.skillLevel = options.skillLevel ?? 20;
+    this.level = options.level ?? 20;
+    this.goCommand = engineGoCommand(this.level);
     this.onBestMoveCallback = options.onBestMove;
     this.onThinkingChangeCallback = options.onThinkingChange;
     this.unsubscribe = transport.onLine((line) => this.handleLine(line));
     if (options.startReady) {
-      this.transport.send(`setoption name Skill Level value ${this.skillLevel}`);
+      this.transport.send(`setoption name Skill Level value ${engineSearchLimits(this.level).skillLevel}`);
       this.markReady();
     } else {
       this.transport.send('uci');
@@ -102,18 +104,18 @@ export class UciSession {
   }
 
   /**
-   * Request a search from `fen` for `movetime` milliseconds. If the handshake
+   * Request a search from `fen` with this session's level limits. If the handshake
    * hasn't completed yet, the request is queued (overwriting any previously
    * queued request) and fired automatically once `readyok` arrives.
    */
-  fireSearch(fen: string, movetime: number): void {
+  fireSearch(fen: string): void {
     this.lastSearchFen = fen;
     if (this.ready) {
       this.setThinking(true);
       this.transport.send(`position fen ${fen}`);
-      this.transport.send(`go movetime ${movetime}`);
+      this.transport.send(this.goCommand);
     } else {
-      this.pendingSearch = { fen, movetime };
+      this.pendingSearch = { fen };
     }
   }
 
@@ -130,7 +132,7 @@ export class UciSession {
       this.pendingSearch = null;
       this.setThinking(true);
       this.transport.send(`position fen ${pending.fen}`);
-      this.transport.send(`go movetime ${pending.movetime}`);
+      this.transport.send(this.goCommand);
     }
   }
 
@@ -144,7 +146,7 @@ export class UciSession {
     if (line.startsWith('info') || line.startsWith('id')) return;
 
     if (line === 'uciok') {
-      this.transport.send(`setoption name Skill Level value ${this.skillLevel}`);
+      this.transport.send(`setoption name Skill Level value ${engineSearchLimits(this.level).skillLevel}`);
       this.transport.send('ucinewgame');
       this.transport.send('isready');
       return;

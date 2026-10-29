@@ -14,6 +14,7 @@ export * from './boardEditor';
 export * from './gameOutcome';
 export * from './uciInfoParser';
 export * from './uciSession';
+export * from './engineStrength';
 export * from './missionSucceeded';
 export * from './missionClock';
 export * from './lagComp';
