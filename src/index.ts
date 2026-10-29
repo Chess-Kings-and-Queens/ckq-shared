@@ -31,6 +31,7 @@ export * from './apiErrors';
 export * from './levelMetricDisplay';
 export * from './tournamentResultLabels';
 export * from './tablebase';
+export * from './boardAppearance';
 
 export * from './types/student';
 export * from './types/workLog';
