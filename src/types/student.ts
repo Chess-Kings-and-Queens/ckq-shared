@@ -32,10 +32,59 @@ export interface AcademyStandards {
   practiceHoursPerWeek?: number;
 }
 
-/** GET /student-activity/board-preferences — backend studentActivity.service.js getBoardPreferences. */
+/** A piece position key, lichess file-name style. */
+export type PieceKey = 'wK' | 'wQ' | 'wR' | 'wB' | 'wN' | 'wP' | 'bK' | 'bQ' | 'bR' | 'bB' | 'bN' | 'bP';
+
+/** One board colour theme — backend config/boardAppearance.js BOARD_THEMES. Every value is CSS colour text. */
+export interface BoardTheme {
+  id: string;
+  name: string;
+  tagline: string;
+  sortOrder: number;
+  isDefault: boolean;
+  colors: {
+    lightSquare: string;
+    darkSquare: string;
+    frame: string;
+    coordOnFrame: string;
+    lastMove: string;
+    selected: string;
+    moveDest: string;
+  };
+  /** Position the Settings previews draw. */
+  previewFen: string;
+}
+
+/** One piece set — backend config/boardAppearance.js PIECE_SETS. `pieces` holds absolute SVG URLs. */
+export interface PieceSet {
+  id: string;
+  name: string;
+  tagline: string;
+  sortOrder: number;
+  isDefault: boolean;
+  pieces: Record<PieceKey, string>;
+  /** Shown under the set in Settings when present. */
+  attribution: string | null;
+}
+
+/** GET and PATCH /student-activity/board-preferences — backend studentActivity.service.js getBoardPreferences. */
 export interface BoardPreferences {
   /** Show legal-move dots when a piece is picked up. False for students above Pawn 1. */
   showMoveHints: boolean;
+  /** The stored choice; null means "the default". */
+  boardThemeId: string | null;
+  pieceSetId: string | null;
+  /** Resolved server-side: the stored choice, or the default when null, unknown or retired. */
+  boardTheme: BoardTheme;
+  pieceSet: PieceSet;
+  /** Active entries, sorted by sortOrder. */
+  catalog: { boardThemes: BoardTheme[]; pieceSets: PieceSet[] };
+}
+
+/** PATCH /student-activity/board-preferences body — at least one key. */
+export interface BoardPreferencesPatch {
+  boardThemeId?: string;
+  pieceSetId?: string;
 }
 
 export type LevelUpMetricKey =
