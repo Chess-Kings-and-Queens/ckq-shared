@@ -39,6 +39,10 @@ export interface TrailRules {
   quizPointsPerSessionMax: number;
   homeworkPerMonthMax: number;
   categoryMaxPct: number;
+  /** Points per hour of Work Log practice (self-logged and synced), per ET ISO week. */
+  practicePerHour: number;
+  /** Most home-practice points one ET ISO week can earn. */
+  practicePerWeekMax: number;
   categoryMax: number;
 }
 
@@ -77,7 +81,8 @@ export type TrailCategoryKey =
   | 'missions'
   | 'otbTournaments'
   | 'onlineTournaments'
-  | 'workbook';
+  | 'workbook'
+  | 'practice';
 
 export type TrailCategoryExtra = { played: number; won: number } | { ratingGains: number };
 
@@ -119,6 +124,8 @@ export interface TrailCategory {
   key: TrailCategoryKey;
   label: string;
   icon: string;
+  /** The scoring sentence for this category, built by the backend from academy.trail (ADR frontend-010). Rendered verbatim. */
+  rule: string;
   leaders: { studentId: string; name: string; points: number; isMe: boolean; canOpenActivity: boolean }[];
   me: { rank: number; points: number; capped: boolean } | null;
 }
