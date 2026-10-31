@@ -1,48 +1,31 @@
 import {
-  computeStrikesLeft,
-  formatRushThreshold,
+  formatThinkSeconds,
   shouldShowExitWarning,
   computeTimeTaken,
 } from '../homeworkSession';
 
-describe('computeStrikesLeft', () => {
-  test('normal case: subtracts active violations from the threshold', () => {
-    expect(computeStrikesLeft(3, 1)).toBe(2);
+describe('formatThinkSeconds', () => {
+  test('normal case: sub-minute seconds format as "N sec"', () => {
+    expect(formatThinkSeconds(6)).toBe('6 sec');
+    expect(formatThinkSeconds(36)).toBe('36 sec');
   });
 
-  test('boundary: clamps to 0 rather than going negative when violations exceed the threshold', () => {
-    expect(computeStrikesLeft(3, 5)).toBe(0);
+  test('boundary: zero seconds', () => {
+    expect(formatThinkSeconds(0)).toBe('0 sec');
   });
 
-  test('boundary: exactly at the threshold leaves 0 strikes', () => {
-    expect(computeStrikesLeft(3, 3)).toBe(0);
-  });
-
-  test('no violations yet leaves the full threshold', () => {
-    expect(computeStrikesLeft(3, 0)).toBe(3);
-  });
-});
-
-describe('formatRushThreshold', () => {
-  test('normal case: sub-minute threshold formats as seconds', () => {
-    // 20% of 180s = 36s
-    expect(formatRushThreshold(20, 180)).toBe('36 sec');
+  test('boundary: just under a minute still formats as seconds', () => {
+    expect(formatThinkSeconds(59)).toBe('59 sec');
   });
 
   test('boundary: exactly 60 seconds formats as whole minutes with no leftover', () => {
-    // 20% of 300s = 60s
-    expect(formatRushThreshold(20, 300)).toBe('1 min');
+    expect(formatThinkSeconds(60)).toBe('1 min');
+    expect(formatThinkSeconds(120)).toBe('2 min');
   });
 
   test('minute-and-seconds case formats as "Mm Ss"', () => {
-    // 20% of 600s = 120s -> 2 min exactly
-    expect(formatRushThreshold(20, 600)).toBe('2 min');
-    // 25% of 600s = 150s -> 2m 30s
-    expect(formatRushThreshold(25, 600)).toBe('2m 30s');
-  });
-
-  test('boundary: just under 60 seconds still formats as seconds', () => {
-    expect(formatRushThreshold(19, 300)).toBe('57 sec');
+    expect(formatThinkSeconds(90)).toBe('1m 30s');
+    expect(formatThinkSeconds(150)).toBe('2m 30s');
   });
 });
 

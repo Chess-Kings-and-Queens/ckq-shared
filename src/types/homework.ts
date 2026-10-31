@@ -56,6 +56,10 @@ export interface HomeworkStrikeStatus {
   rushViolationsToBlock: number;
   minThinkTimePct: number;
   isBlocked: boolean;
+  /** max(0, rushViolationsToBlock − activeViolations), computed by the backend. */
+  strikesLeft: number;
+  /** floor(minThinkTimePct / 100 × homework timeLimit) in seconds; null when the homework has no time limit. */
+  rushThresholdSeconds: number | null;
 }
 
 /** GET /homework/:id/puzzle (homework.service.js getPuzzleContent); one success branch. */
@@ -109,6 +113,7 @@ export interface HomeworkRushViolation {
   isViolation: boolean;
   isBlocked: boolean;
   violationCount: number;
+  strikesLeft: number;
 }
 
 /** PUT /homework-result/:id/move success body (homeworkResult.controller.js submitMove). */
