@@ -7,6 +7,7 @@
 // "lift the inline arithmetic" slice, NOT the Phase 3 "rewrite the timer as a
 // state machine" work. See `docs/plans/mobile-app-plan.md` Phase 3 and
 // `docs/modules/homework.md` for the underlying business rules.
+// Since v0.28.0 the strike arithmetic (strikes left, threshold seconds) is backend-sent (ADR frontend-010); this file keeps client timing and dialog rules only.
 //
 // IMPORTANT: none of these functions compute or apply attempt-based score
 // decay (100%/50%/25% for attempt 1/2/3 — see homework.md's "Attempt system"
@@ -17,27 +18,10 @@
 // file must never diverge from that.
 
 /**
- * Rush strikes remaining before the student is blocked to 1 attempt per
- * position. Ported verbatim from the homework-report page's `strikesLeft`
- * (`page.tsx` lines 229-231). Clamped to 0 — `activeViolations` can exceed
- * `rushViolationsToBlock` transiently, and the UI must never show a negative
- * strike count. See `docs/modules/homework.md`'s "Strike (rush limit) system".
+ * Formats a whole number of seconds for the rush-strike notice: under a minute "N sec", otherwise "M min" with no
+ * leftover seconds or "Mm Ss". Pure presentation: the seconds come from the backend (`rushThresholdSeconds`).
  */
-export function computeStrikesLeft(rushViolationsToBlock: number, activeViolations: number): number {
-  return Math.max(0, rushViolationsToBlock - activeViolations);
-}
-
-/**
- * Formats the rush-strike minimum-think-time threshold for display. Ported
- * verbatim from the homework-report page's `rushThresholdDisplay`
- * (`page.tsx` lines 234-242): seconds under a minute are shown as
- * `"N sec"`; a minute or more is shown as `"M min"` when there's no leftover
- * seconds, or `"Mm Ss"` otherwise. See `docs/modules/homework.md`'s "Strike
- * (rush limit) system" for what `minThinkTimePct` means (a strike is recorded
- * when `timeTaken < (minThinkTimePct / 100) × positionTimeLimit`).
- */
-export function formatRushThreshold(minThinkTimePct: number, timeLimit: number): string {
-  const secs = Math.floor((minThinkTimePct / 100) * timeLimit);
+export function formatThinkSeconds(secs: number): string {
   if (secs < 60) return `${secs} sec`;
   const m = Math.floor(secs / 60);
   const s = secs % 60;

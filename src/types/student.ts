@@ -97,6 +97,16 @@ export interface LevelUpMetricExtra {
   currentRating?: number | null; goal?: number | null;
   byCategory?: { endgame: CategoryCount; conversion: CategoryCount; uncategorised: CategoryCount };
 }
+/** Display fields the backend builds for each metric (levelMetricDisplay.js); rendered verbatim (ADR frontend-010). */
+export type LevelMetricRowKind = 'hidden' | 'na-group-only' | 'na' | 'cta' | 'standard';
+export interface LevelMetricDisplay {
+  label: string;
+  sub: string | null;
+  valueText: string;
+  rowKind: LevelMetricRowKind;
+  /** "Group class only" on a na-group-only row; null otherwise. */
+  naText: string | null;
+}
 export interface LevelUpMetric {
   key: LevelUpMetricKey;
   group: 'participation' | 'performance' | 'recommended' | 'reserved';
@@ -105,6 +115,7 @@ export interface LevelUpMetric {
   value: number | null; total: number | null; threshold: number | null;
   score: number | null; met: boolean | null; applicable: boolean; gate: boolean;
   extra: LevelUpMetricExtra | null;
+  display: LevelMetricDisplay;
 }
 export interface LevelUpScore {
   name: string; target: number; overall: number | null; ready: boolean;
