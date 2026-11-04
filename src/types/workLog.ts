@@ -7,6 +7,25 @@ type WorkLogSource = "self" | "lichess" | "chesscom" | "chesskid" | "uscf" | "ck
 type WorkLogKind = "self" | "auto";
 type WorkLogResult = "won" | "draw" | "lost";
 
+export type WorkLogPlatform = "chesscom" | "lichess";
+
+export interface WorkLogPlatformGames {
+  gamesPlayed: number;
+  wins: number;
+  draws: number;
+  losses: number;
+}
+
+/** Response of POST /work-log/sync/:source (synced-practice-by-day D9). */
+export interface WorkLogSyncResult {
+  source: WorkLogPlatform;
+  title: string;
+  /** Day rows written by this sync. */
+  days: number;
+  /** Games in the synced window. */
+  gamesPlayed: number;
+}
+
 export interface WorkLogEntry {
   _id: string;
   student: string;
@@ -37,6 +56,8 @@ export interface WorkLogAggregate {
   weekStart: string;
   /** ISO end of that window. Clients filter entries and label the week from these, never computing bounds. */
   weekEnd: string;
+  /** Week game totals per synced platform, from the window's auto rows (backend-2.0 workLog.service, synced-practice-by-day D8). A key is present only when that platform has synced rows in the window. */
+  platformGames: Partial<Record<WorkLogPlatform, WorkLogPlatformGames>>;
 }
 
 export interface WeeklyHistoryItem {
