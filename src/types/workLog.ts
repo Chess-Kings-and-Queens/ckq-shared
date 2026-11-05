@@ -48,6 +48,25 @@ export interface WorkLogEntry {
   createdAt: string;
 }
 
+export type WorkLogStatus = "goal_reached" | "on_pace" | "behind" | "no_target";
+
+export interface WorkLogActivityProgress {
+  activityId: string;
+  label: string;
+  hoursPerWeek: number;
+  loggedHours: number;
+  met: boolean;
+}
+
+export interface WorkLogDay {
+  /** YYYY-MM-DD, ET */
+  date: string;
+  /** self + synced */
+  hours: number;
+  isToday: boolean;
+  isFuture: boolean;
+}
+
 export interface WorkLogAggregate {
   totalHours: number;
   perActivity: Record<string, number>;
@@ -58,6 +77,19 @@ export interface WorkLogAggregate {
   weekEnd: string;
   /** Week game totals per synced platform, from the window's auto rows (backend-2.0 workLog.service, synced-practice-by-day D8). A key is present only when that platform has synced rows in the window. */
   platformGames: Partial<Record<WorkLogPlatform, WorkLogPlatformGames>>;
+  weekRange: string;
+  isCurrentWeek: boolean;
+  selfHours: number;
+  syncedHours: number;
+  unplannedHours: number;
+  entryCounts: { self: number; auto: number };
+  targetHours: number | null;
+  expectedHours: number | null;
+  hoursShort: number | null;
+  status: WorkLogStatus;
+  activities: WorkLogActivityProgress[];
+  focusActivityId: string | null;
+  days: WorkLogDay[];
 }
 
 export interface WeeklyHistoryItem {
@@ -66,4 +98,11 @@ export interface WeeklyHistoryItem {
   weekLabel: string;
   totalHours: number;
   perActivity: Record<string, number>;
+  weekRange: string;
+  isCurrentWeek: boolean;
+  selfHours: number;
+  syncedHours: number;
+  unplannedHours: number;
+  targetHours: number | null;
+  metTarget: boolean | null;
 }
