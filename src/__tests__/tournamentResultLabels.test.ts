@@ -79,6 +79,11 @@ describe("result helpers", () => {
     expect(resultReasonLabel(null)).toBe("—");
   });
 
+  it("resultReasonLabel and resultSummary word a no-start loss", () => {
+    expect(resultReasonLabel("no-start")).toBe("No first move");
+    expect(resultSummary("1-0", "no-start", "Ethan P.", "Mia K.")).toBe("Ethan P. won by no first move");
+  });
+
   it("resultReasonLabel words the legacy engine-bye reason names", () => {
     expect(resultReasonLabel("stalemate")).toBe("Stalemate");
     expect(resultReasonLabel("threefold")).toBe("Repetition");

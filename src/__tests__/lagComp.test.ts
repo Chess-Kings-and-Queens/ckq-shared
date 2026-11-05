@@ -1,12 +1,16 @@
 import {
+  CLOCK_START_PLIES,
   baseQuotaGainMs,
   chargeMove,
+  clockStarted,
   compensate,
   flaggedAt,
   graceMs,
   initialLagQuota,
+  moveFlagged,
   reportedLagMs,
   settleRemainingMs,
+  timeForFirstMoveMs,
   withTrustedLag,
 } from '../lagComp';
 
@@ -163,6 +167,17 @@ describe('flaggedAt', () => {
     expect(flaggedAt(1000, 1000, 0)).toBe(true);
     expect(flaggedAt(1000, 999, 0)).toBe(false);
   });
+
+  test('a side at 0 is flagged on any check, inside the grace window too (Lichess nonNeg floor)', () => {
+    expect(flaggedAt(0, 500, 2000)).toBe(true);
+    expect(flaggedAt(0, 0, 2000)).toBe(true);
+    expect(flaggedAt(-1, 0, 2000)).toBe(true);
+  });
+
+  test('a side with time left and no elapsed time is not flagged', () => {
+    expect(flaggedAt(1, 0, 2000)).toBe(false);
+    expect(flaggedAt(1, 1000, 1500)).toBe(false);
+  });
 });
 
 describe('settleRemainingMs', () => {
@@ -186,5 +201,67 @@ describe('settleRemainingMs', () => {
     expect(settleRemainingMs(NaN, 10 * SEC)).toBe(0);
     expect(settleRemainingMs(54 * SEC, NaN)).toBe(54 * SEC);
     expect(settleRemainingMs(54 * SEC, Infinity)).toBe(54 * SEC);
+  });
+});
+
+describe('moveFlagged (strict arrival)', () => {
+  test('a move before the remaining time runs out is not flagged', () => {
+    expect(moveFlagged(200, 150, 0)).toBe(false);
+  });
+
+  test('a move at exactly the remaining time is flagged', () => {
+    expect(moveFlagged(200, 200, 0)).toBe(true);
+  });
+
+  test('compensation is subtracted from the elapsed time', () => {
+    expect(moveFlagged(200, 1200, 1000)).toBe(true);
+    expect(moveFlagged(200, 1200, 1001)).toBe(false);
+  });
+
+  test('compensation larger than elapsed floors the move time at 0', () => {
+    expect(moveFlagged(5, 100, 500)).toBe(false);
+  });
+
+  test('a side with 0 remaining is flagged even with no elapsed time', () => {
+    expect(moveFlagged(0, 0, 0)).toBe(true);
+  });
+
+  test('NaN and negative compensation count as 0', () => {
+    expect(moveFlagged(200, 150, NaN)).toBe(false);
+    expect(moveFlagged(200, 200, NaN)).toBe(true);
+    expect(moveFlagged(200, 200, -500)).toBe(true);
+    expect(moveFlagged(200, 150, -500)).toBe(false);
+  });
+
+  test('a non-finite elapsed time counts as 0', () => {
+    expect(moveFlagged(1000, NaN, 0)).toBe(false);
+  });
+});
+
+describe('clockStarted', () => {
+  test('CLOCK_START_PLIES is 2', () => {
+    expect(CLOCK_START_PLIES).toBe(2);
+  });
+
+  test.each([
+    [0, false],
+    [1, false],
+    [2, true],
+    [3, true],
+  ])('%i plies played -> %s', (plies, expected) => {
+    expect(clockStarted(plies)).toBe(expected);
+  });
+});
+
+describe('timeForFirstMoveMs (Lichess tournament first-move expiration)', () => {
+  test.each([
+    [15 * SEC, 0, 11_000],
+    [60 * SEC, 0, 16_000],
+    [180 * SEC, 0, 21_000], // 180 s is the Blitz boundary
+    [3 * 60 * SEC, 2 * SEC, 21_000], // 3+2 -> total 260 s
+    [10 * 60 * SEC, 0, 25_000],
+    [25 * 60 * SEC, 0, 30_000],
+  ])('limit %i ms + increment %i ms -> %i ms', (limitMs, incrementMs, expected) => {
+    expect(timeForFirstMoveMs(limitMs, incrementMs)).toBe(expected);
   });
 });
