@@ -75,6 +75,12 @@ describe('isFlagged', () => {
     expect(isFlagged(clock({ turnStartedAt: null }), T0 + 999_000, 'player')).toBe(false);
   });
 
+  test('a side at 0 is flagged inside the grace window (Lichess nonNeg floor)', () => {
+    // playerMs 0, the turn started 500 ms ago, grace 2000
+    expect(isFlagged(clock({ playerMs: 0 }), T0 + 500, 'player', 2_000)).toBe(true);
+    expect(isFlagged(clock({ playerMs: 0, turnStartedAt: null }), T0 + 500, 'player', 2_000)).toBe(false);
+  });
+
   test('with a grace window the flag falls only once remaining <= elapsed - grace', () => {
     // remaining is 60_000 - elapsed; grace 1_500
     expect(isFlagged(clock(), T0 + 60_000, 'player', 1_500)).toBe(false);

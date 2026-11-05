@@ -43,6 +43,7 @@ export function resultReasonLabel(reason: string | null): string {
     timeout: 'Time',
     resign: 'Resignation',
     forfeit: 'Forfeit',
+    'no-start': 'No first move',
     'draw-stalemate': 'Stalemate',
     'draw-repetition': 'Repetition',
     'draw-insufficient': 'Insufficient material',

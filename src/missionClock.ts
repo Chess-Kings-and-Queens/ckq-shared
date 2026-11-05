@@ -25,9 +25,9 @@ export function remainingMs(
 
 /**
  * True when the side to move is out of time at `now`: the server's flag rule,
- * shared for display. `graceMs` is the grace window after zero (Lichess
- * `outOfTime` with grace, see lagComp.ts `flaggedAt`); the default 0 is the
- * plain "no time left" rule.
+ * shared for display. `graceMs` is the grace window; a side at 0 is flagged
+ * whatever the grace (Lichess `outOfTime` floor, see lagComp.ts `flaggedAt`); the
+ * default 0 is the plain "no time left" rule.
  */
 export function isFlagged(
   clock: MissionClock,

@@ -97,6 +97,8 @@ export function compensate(
  * remaining = inTime ? remainingMs - moveTimeMs + incrementMs : 0. Mirrors
  * scalachess `Clock.step`: `moveTime = (elapsed - lagComp).nonNeg`, increment
  * only when `moveTime < player.remaining`, otherwise the clock hard-stops at 0.
+ * Callers check `moveFlagged` first; the `!inTime` branch (remaining 0) is kept for
+ * the shared rule's completeness and is unreachable behind it.
  */
 export function chargeMove(args: {
   remainingMs: number;
@@ -108,6 +110,36 @@ export function chargeMove(args: {
   const inTime = moveTimeMs < args.remainingMs;
   const remainingMs = inTime ? args.remainingMs - moveTimeMs + args.incrementMs : 0;
   return { remainingMs, moveTimeMs, inTime };
+}
+
+/**
+ * Strict arrival (owner, 2026-11-05; stricter than Lichess, which plays a late
+ * move inside grace and then flags): a move whose lag-compensated move time is
+ * at or past the side's remaining time is a flag. The caller rejects the move
+ * and ends the game on time. `chargeMove` is for a move this returns false for.
+ */
+export function moveFlagged(remainingMs: number, elapsedMs: number, compMs: number): boolean {
+  const moveTimeMs = Math.max(0, finiteOr(elapsedMs, 0) - Math.max(0, finiteOr(compMs, 0)));
+  return moveTimeMs >= finiteOr(remainingMs, 0);
+}
+
+/** Lichess: the clock starts once each side has moved (scalachess `Game.applyClock`, `c.start` at the second ply). */
+export const CLOCK_START_PLIES = 2;
+
+/** True once `pliesPlayed` moves have been played and the clock runs (`CLOCK_START_PLIES`). */
+export function clockStarted(pliesPlayed: number): boolean {
+  return finiteOr(pliesPlayed, 0) >= CLOCK_START_PLIES;
+}
+
+/**
+ * Lichess first-move expiration for a tournament game (lila `Game.timeForFirstMove`,
+ * tournament branch; speed by scalachess `Speed.byTime(estimateTotalSeconds)`):
+ * the milliseconds a side has to make its first move before it loses by no-start.
+ */
+export function timeForFirstMoveMs(limitMs: number, incrementMs: number): number {
+  const total = estimateTotalSeconds(limitMs, incrementMs);
+  const seconds = total <= 29 ? 11 : total <= 179 ? 16 : total <= 479 ? 21 : total <= 1499 ? 25 : 30;
+  return seconds * 1000;
 }
 
 /**
@@ -130,10 +162,12 @@ export function graceMs(quota: LagQuota): number {
 }
 
 /**
- * Lichess outOfTime with grace: remainingMs <= elapsedMs - graceMs (grace 0 is
- * the plain "remaining <= elapsed" rule). Mirrors scalachess `Clock.outOfTime`:
- * `remaining <= elapsed - min(quota, 200 cs)`.
+ * Lichess outOfTime with grace: remainingMs <= max(0, elapsedMs - graceMs) (grace 0
+ * is the plain "remaining <= elapsed" rule). Mirrors scalachess `Clock.outOfTime`:
+ * `remaining <= (elapsed - min(quota, 200 cs)).nonNeg`. A side with 0 remaining is
+ * flagged on any check (the floor is what makes that true; it was missing until
+ * 2026-11-05 and let a side at 0 play on inside the grace window).
  */
 export function flaggedAt(remainingMs: number, elapsedMs: number, graceMs: number): boolean {
-  return remainingMs <= elapsedMs - graceMs;
+  return remainingMs <= Math.max(0, elapsedMs - graceMs);
 }
