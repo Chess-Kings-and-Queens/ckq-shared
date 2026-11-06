@@ -1,5 +1,9 @@
+import { TIEBREAK_ORDER } from "../types/tournamentResults";
+import type { JoinState } from "../types/tournamentResults";
+import type { OnlineTournamentJoinState } from "../types/onlineTournaments";
 import {
   formatClockMs,
+  formatClockSeconds,
   formatLabel,
   formatPoints,
   formatTimeControl,
@@ -109,5 +113,32 @@ describe("label maps", () => {
     expect(statusLabel("completed")).toBe("Completed");
     expect(tiebreakLabel("sb")).toBe("Sonneborn-Berger");
     expect(tiebreakLabel("name")).toBe("Name");
+  });
+});
+
+describe("formatClockSeconds", () => {
+  it.each([
+    [0, "0:00"],
+    [65, "1:05"],
+    [59.9, "0:59"],
+    [-5, "0:00"],
+    [3600, "60:00"],
+  ])("%s -> %s", (seconds, expected) => {
+    expect(formatClockSeconds(seconds)).toBe(expected);
+  });
+});
+
+describe("TIEBREAK_ORDER", () => {
+  it("is points, sb, wins, name", () => {
+    expect([...TIEBREAK_ORDER]).toEqual(["points", "sb", "wins", "name"]);
+  });
+});
+
+describe("OnlineTournamentJoinState", () => {
+  it("is the same type as JoinState (assignable both ways)", () => {
+    const a: JoinState = "between_rounds";
+    const b: OnlineTournamentJoinState = a;
+    const c: JoinState = b;
+    expect(c).toBe("between_rounds");
   });
 });

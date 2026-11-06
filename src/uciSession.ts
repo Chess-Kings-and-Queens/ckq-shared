@@ -1,5 +1,6 @@
 import { uciMoveToSan } from './chessUtils';
 import { engineSearchLimits, engineGoCommand } from './engineStrength';
+import { parseBestmove } from './uciInfoParser';
 
 // ── UCI session protocol ───────────────────────────────────────────────────────
 //
@@ -159,8 +160,8 @@ export class UciSession {
 
     if (line.startsWith('bestmove')) {
       this.setThinking(false);
-      const uci = line.split(' ')[1];
-      if (!uci || uci === '(none)') return;
+      const uci = parseBestmove(line);
+      if (!uci) return;
       const san = uciMoveToSan(this.lastSearchFen, uci);
       if (san) this.onBestMoveCallback?.(san);
     }

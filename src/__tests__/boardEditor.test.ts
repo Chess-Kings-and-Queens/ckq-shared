@@ -11,6 +11,7 @@ import {
   draftToFen,
   validatePosition,
   validateStartPosition,
+  squareToFileRank,
 } from '../boardEditor';
 import * as shared from '../index';
 import { START_FEN } from '../chessUtils';
@@ -269,5 +270,20 @@ describe('package root exports', () => {
     expect(typeof shared.validatePosition).toBe('function');
     expect(typeof shared.draftFromFen).toBe('function');
     expect(typeof shared.enPassantCandidates).toBe('function');
+  });
+});
+
+describe('squareToFileRank', () => {
+  test('maps a1 and h8 to the board corners', () => {
+    expect(squareToFileRank('a1')).toEqual({ file: 0, rank: 0 });
+    expect(squareToFileRank('h8')).toEqual({ file: 7, rank: 7 });
+  });
+  test('maps e4', () => {
+    expect(squareToFileRank('e4')).toEqual({ file: 4, rank: 3 });
+  });
+  test('returns null for a malformed square', () => {
+    expect(squareToFileRank('i9')).toBeNull();
+    expect(squareToFileRank('')).toBeNull();
+    expect(squareToFileRank('e44')).toBeNull();
   });
 });

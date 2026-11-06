@@ -9,6 +9,7 @@ import {
 } from '../statusDisplay';
 import type { Tone } from '../statusDisplay';
 import { tokens } from '../tokens';
+import type { MissionStatus } from '../types/missions';
 
 describe('status display maps', () => {
   it('maps every homework status', () => {
@@ -74,5 +75,12 @@ describe('toneColors', () => {
       in_progress: { label: 'In progress', tone: 'orange' },
       upcoming: { label: 'Upcoming', tone: 'neutral' },
     });
+  });
+});
+
+describe('MissionStatus export', () => {
+  it('is importable by name and keys the mission status display map', () => {
+    const status: MissionStatus = 'attempts_exhausted';
+    expect(missionStatusDisplay[status]).toBeDefined();
   });
 });

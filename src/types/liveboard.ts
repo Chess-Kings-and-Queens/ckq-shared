@@ -43,3 +43,10 @@ export interface MyClassroomSession {
   roomActive: boolean;
   roomId: string | null;
 }
+
+/** Engine-judge verdict stored on a LiveSession answer (null = exact match / v1 / timeout). */
+export const QUIZ_VERDICTS = ["better", "equivalent", "acceptable", "wrong"] as const;
+export type QuizVerdict = (typeof QUIZ_VERDICTS)[number];
+/** `quiz:move-result.status` as live-classroom-server emits it (sessionRoom.js finalizeV2). */
+export const QUIZ_MOVE_RESULT_STATUSES = ["correct", "alternate", "acceptable", "wrong"] as const;
+export type QuizMoveResultStatus = (typeof QUIZ_MOVE_RESULT_STATUSES)[number];

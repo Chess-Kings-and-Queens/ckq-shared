@@ -1,5 +1,14 @@
 import { ChessGame } from '../chessGame';
-import { detectOutcome, collectPgn, buildUci, resumeReplay, toTournamentReason } from '../gameOutcome';
+import {
+  detectOutcome,
+  collectPgn,
+  buildUci,
+  resumeReplay,
+  toTournamentReason,
+  TOURNAMENT_RESULT_REASONS,
+  resultStringOf,
+  outcomeOf,
+} from '../gameOutcome';
 import { START_FEN } from '../chessUtils';
 import { createRoot, type MoveNode } from '../moveTree';
 
@@ -135,5 +144,38 @@ describe('resumeReplay', () => {
     result.game.play('Ka1');
     result.game.play('Kh8');
     expect(detectOutcome(result.game)).toEqual({ reason: 'threefold', winner: null });
+  });
+});
+
+describe('TOURNAMENT_RESULT_REASONS', () => {
+  test("contains 'no-start' and every reason toTournamentReason can return", () => {
+    expect(TOURNAMENT_RESULT_REASONS).toContain('no-start');
+    expect(TOURNAMENT_RESULT_REASONS).toContain('aborted');
+    expect(TOURNAMENT_RESULT_REASONS).toContain(toTournamentReason('agreement'));
+    expect(TOURNAMENT_RESULT_REASONS).toContain(toTournamentReason('fifty-move'));
+  });
+});
+
+describe('resultStringOf', () => {
+  test('white wins 1-0, black wins 0-1, a draw is 1/2-1/2', () => {
+    expect(resultStringOf('white')).toBe('1-0');
+    expect(resultStringOf('black')).toBe('0-1');
+    expect(resultStringOf(null)).toBe('1/2-1/2');
+  });
+});
+
+describe('outcomeOf', () => {
+  test.each([
+    ['1-0', 'white', 'win'],
+    ['1-0', 'black', 'loss'],
+    ['0-1', 'white', 'loss'],
+    ['0-1', 'black', 'win'],
+    ['1/2-1/2', 'white', 'draw'],
+    ['1/2-1/2', 'black', 'draw'],
+    [null, 'white', null],
+    [undefined, 'black', null],
+    ['*', 'white', null],
+  ] as const)('%s from %s is %s', (result, color, expected) => {
+    expect(outcomeOf(result, color)).toBe(expected);
   });
 });

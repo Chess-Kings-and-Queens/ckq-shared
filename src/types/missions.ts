@@ -43,7 +43,7 @@ export interface AttemptStats {
 // 'failed' means at least one completed attempt has not succeeded but the mission
 // is still retriable (maxAttempts unset or not yet reached) — distinct from
 // 'not_started' (never attempted) and 'attempts_exhausted' (no retries left).
-type MissionStatus = 'not_started' | 'in_progress' | 'succeeded' | 'failed' | 'attempts_exhausted';
+export type MissionStatus = 'not_started' | 'in_progress' | 'succeeded' | 'failed' | 'attempts_exhausted';
 
 export interface Mission {
   _id: string;

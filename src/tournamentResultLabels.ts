@@ -25,6 +25,12 @@ export function formatClockMs(ms: number | null): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+/** m:ss from whole seconds, clamped at 0 and floored (the live-clock callers pass Math.ceil(ms / 1000)). */
+export function formatClockSeconds(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
 export function formatTimeControl(seconds: number, increment: number): string {
   return `${Math.round(seconds / 60)}+${increment}`;
 }

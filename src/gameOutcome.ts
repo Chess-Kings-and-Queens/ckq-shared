@@ -37,10 +37,13 @@ export function detectOutcome(game: ChessGame): GameResult | null {
 
 // ── Stored tournament vocabulary ────────────────────────────────────────────────
 
-/** The result reasons stored on tournament games (DB, backend enum and labels speak this set). */
-export type TournamentResultReason =
-  | 'checkmate' | 'timeout' | 'resign' | 'forfeit' | 'aborted'
-  | 'draw-stalemate' | 'draw-repetition' | 'draw-insufficient' | 'draw-50move' | 'draw-agreed';
+/** The result reasons stored on tournament games (DB enum in backend-2.0 liveboardTournamentGame.model.js, written by live-classroom-server). */
+export const TOURNAMENT_RESULT_REASONS = [
+  'checkmate', 'timeout', 'resign', 'forfeit', 'no-start',
+  'draw-stalemate', 'draw-repetition', 'draw-insufficient', 'draw-50move', 'draw-agreed',
+  'aborted',
+] as const;
+export type TournamentResultReason = (typeof TOURNAMENT_RESULT_REASONS)[number];
 
 /**
  * Maps a live `GameResultReason` to the string stored on a tournament game.
@@ -132,4 +135,18 @@ export function resumeReplay(
     gameResult,
     isOpponentTurnNext: gameResult ? false : opponentTurnNow,
   };
+}
+
+/** A player's outcome vocabulary ('win' | 'loss' | 'draw'). */
+export type GameOutcome = 'win' | 'loss' | 'draw';
+/** A finished game's PGN result string from a winner colour (null = draw). */
+export function resultStringOf(winner: 'white' | 'black' | null): '1-0' | '0-1' | '1/2-1/2' {
+  return winner === 'white' ? '1-0' : winner === 'black' ? '0-1' : '1/2-1/2';
+}
+/** One side's outcome from a PGN result string; null for an unfinished/aborted game. */
+export function outcomeOf(result: string | null | undefined, color: 'white' | 'black'): GameOutcome | null {
+  if (result === '1/2-1/2') return 'draw';
+  if (result === '1-0') return color === 'white' ? 'win' : 'loss';
+  if (result === '0-1') return color === 'white' ? 'loss' : 'win';
+  return null;
 }

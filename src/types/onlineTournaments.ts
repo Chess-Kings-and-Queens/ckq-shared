@@ -3,6 +3,7 @@
 // Moved verbatim from website2.0's src/app/services/onlineTournaments.ts. Pure API contract
 // shapes only (no axios/fetch functions — those stay web-specific).
 
+import type { JoinState } from './tournamentResults';
 
 export type OnlineTournamentFormat = 'tournament' | 'league';
 export type OnlineTournamentStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
@@ -16,7 +17,7 @@ export type OnlineTournamentStatus = 'scheduled' | 'in_progress' | 'completed' |
  * tournament never reaches the client in the first place. Handled here
  * defensively anyway since it's part of the documented enum.
  */
-export type OnlineTournamentJoinState = 'upcoming' | 'open' | 'in_round' | 'between_rounds' | 'done';
+export type OnlineTournamentJoinState = JoinState;
 
 export interface MyOnlineTournament {
   _id: string;

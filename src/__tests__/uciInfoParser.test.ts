@@ -1,4 +1,4 @@
-import { extractInt, uciToSan, parseInfoLine } from '../uciInfoParser';
+import { extractInt, uciToSan, parseInfoLine, parseUciInfoRaw, parseBestmove } from '../uciInfoParser';
 import { START_FEN } from '../chessUtils';
 
 describe('extractInt', () => {
@@ -88,5 +88,71 @@ describe('parseInfoLine', () => {
     const line = 'info depth 10 score cp 10 pv e2e4';
     const parsed = parseInfoLine(line, START_FEN);
     expect(parsed!.rank).toBe(1);
+  });
+});
+
+describe('parseUciInfoRaw', () => {
+  // Ported from chess-engine-api src/__tests__/uciParser.test.js (the parser it replaces).
+  test('parses a cp score line with nodes, nps and time', () => {
+    expect(parseUciInfoRaw('info depth 25 seldepth 35 multipv 2 score cp 82 nodes 1234567 nps 5906000 time 209 pv e2e4 e7e5 g1f3')).toEqual({
+      depth: 25, multipv: 2, scoreCp: 82, mateIn: null,
+      uciMoves: ['e2e4', 'e7e5', 'g1f3'], nodes: 1234567, nps: 5906000, time: 209,
+    });
+  });
+
+  test('parses a positive mate score', () => {
+    const parsed = parseUciInfoRaw('info depth 20 multipv 1 score mate 4 nodes 10 pv g1f3 d7d5');
+    expect(parsed?.mateIn).toBe(4);
+    expect(parsed?.scoreCp).toBeNull();
+    expect(parsed?.nodes).toBe(10);
+  });
+
+  test('parses a negative mate score', () => {
+    const parsed = parseUciInfoRaw('info depth 20 multipv 1 score mate -3 nodes 10 pv g1f3 d7d5');
+    expect(parsed?.mateIn).toBe(-3);
+    expect(parsed?.scoreCp).toBeNull();
+  });
+
+  test('defaults multipv to 1 and leaves absent nodes/nps/time null', () => {
+    const parsed = parseUciInfoRaw('info depth 12 score cp 10 pv e2e4');
+    expect(parsed?.multipv).toBe(1);
+    expect(parsed?.nodes).toBeNull();
+    expect(parsed?.nps).toBeNull();
+    expect(parsed?.time).toBeNull();
+  });
+
+  test('returns null for a line without a pv', () => {
+    expect(parseUciInfoRaw('info depth 12 multipv 1 score cp 10 nodes 10')).toBeNull();
+  });
+
+  test('returns null for a non-info line', () => {
+    expect(parseUciInfoRaw('bestmove e2e4 ponder e7e5')).toBeNull();
+  });
+
+  test('is not broken by a wdl token', () => {
+    const parsed = parseUciInfoRaw('info depth 18 multipv 1 score cp 30 wdl 355 620 25 nodes 100 nps 1000 time 5 pv e2e4 e7e5');
+    expect(parsed?.scoreCp).toBe(30);
+    expect(parsed?.uciMoves).toEqual(['e2e4', 'e7e5']);
+    expect(parsed?.nps).toBe(1000);
+    expect(parsed?.time).toBe(5);
+  });
+
+  test('keeps the engine score from the side to move (no White-POV flip)', () => {
+    const blackToMove = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
+    expect(parseUciInfoRaw('info depth 10 score cp 40 pv e7e5')?.scoreCp).toBe(40);
+    expect(parseInfoLine('info depth 10 score cp 40 pv e7e5', blackToMove)?.data.scoreCp).toBe(-40);
+  });
+});
+
+describe('parseBestmove', () => {
+  test('returns the move of a bestmove line, ignoring ponder', () => {
+    expect(parseBestmove('bestmove e2e4 ponder e7e5')).toBe('e2e4');
+    expect(parseBestmove('bestmove a7a8q')).toBe('a7a8q');
+  });
+
+  test('returns null for (none), a bare bestmove and a non-bestmove line', () => {
+    expect(parseBestmove('bestmove (none)')).toBeNull();
+    expect(parseBestmove('bestmove')).toBeNull();
+    expect(parseBestmove('info depth 1')).toBeNull();
   });
 });

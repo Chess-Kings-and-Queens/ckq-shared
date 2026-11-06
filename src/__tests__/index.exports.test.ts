@@ -1,0 +1,68 @@
+import * as shared from '../index';
+
+/** Every runtime export this release added; a missing re-export in the barrel fails here. */
+const NEW_RUNTIME_EXPORTS = [
+  // types/liveboard.ts
+  'QUIZ_VERDICTS',
+  'QUIZ_MOVE_RESULT_STATUSES',
+  // gameOutcome.ts
+  'TOURNAMENT_RESULT_REASONS',
+  'resultStringOf',
+  'outcomeOf',
+  // types/tournamentResults.ts
+  'TIEBREAK_ORDER',
+  // tournamentResultLabels.ts
+  'formatClockSeconds',
+  // decodeJwt.ts
+  'decodeJwtPayload',
+  'ADMIN_ROLES',
+  'STAFF_ROLES',
+  'isAdminRole',
+  'isStaffRole',
+  // names.ts
+  'fullName',
+  'shortName',
+  'initials',
+  // labels.ts
+  'premiumLabels',
+  'planOptionLabel',
+  'selectOpenPlan',
+  'ACTIVITY_EVENT_SYMBOL',
+  'activityEventSymbol',
+  'UNLIMITED_TIME_CONTROL_SECONDS',
+  'missionTimeLabel',
+  // missionAppend.ts
+  'classifyAppendError',
+  // types/homework.ts
+  'HOMEWORK_CONFLICT_CODES',
+  'homeworkConflictCode',
+  // uciInfoParser.ts
+  'parseUciInfoRaw',
+  'parseBestmove',
+  // boardEditor.ts
+  'squareToFileRank',
+  // dates.ts
+  'DEFAULT_TIMEZONE',
+  'formatDateOnly',
+  'formatDateTime',
+  'formatMonthYear',
+  'isDatePastUTC',
+  'formatDateOnlyET',
+  'toFormDateET',
+  'toFormDateInTz',
+  'toFormDateUTC',
+  'isDatePastET',
+  'formatTimeInTZ',
+  'formatClockTime',
+  'stepDateStr',
+  // onlineTournamentWindow.ts
+  'computeFireTime',
+  'DEFAULT_JOIN_WINDOW_MINUTES',
+  'joinWindowOpensAt',
+] as const;
+
+describe('package root exports (v0.33.0)', () => {
+  test.each(NEW_RUNTIME_EXPORTS)('%s is exported from the barrel', (name) => {
+    expect((shared as Record<string, unknown>)[name]).toBeDefined();
+  });
+});
