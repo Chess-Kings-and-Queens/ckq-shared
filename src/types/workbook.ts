@@ -71,8 +71,6 @@ export interface SubmitWorkbookMoveInput {
   materialId: string;
   positionIndex: number;
   moves: string[];
-  /** @deprecated Ignored by the backend, which grades the moves itself (ADR backend-024). Omit it. */
-  isCorrect?: boolean;
-  /** @deprecated Ignored by the backend, which grades the moves itself (ADR backend-024). Omit it. */
-  score?: number;
+  /** The attempt being answered, from `open`; makes a resend idempotent (D5). */
+  attemptNumber?: number;
 }

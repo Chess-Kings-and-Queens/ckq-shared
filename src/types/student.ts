@@ -24,6 +24,7 @@ export interface ActivityEvent {
   subtitle: string;
 }
 
+/** @deprecated The website's only reader was deleted (duplication cleanup); the route's declared type is the website's AcademySettings. */
 export interface AcademyStandards {
   attendance: { goodPct: number };
   homework: { goodPct: number; coveragePct: number; scoreAvgPct: number };
@@ -389,7 +390,7 @@ export interface Subscription {
  * getMySubscriptions (backend/src/utils/paymentCalculator.js — the exact
  * object the renewal cron charges from). All money fields are dollars.
  */
-interface SubscriptionCalculation {
+export interface SubscriptionCalculation {
   originalAmount: number;
   finalAmount: number;
   sessionCount?: number;

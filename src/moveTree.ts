@@ -1,6 +1,7 @@
 import { PgnReader } from '@mliebelt/pgn-reader';
 import { START_FEN } from './chessUtils';
 import { fenFields, fenFromFields } from './fen';
+import { setPieceAt } from './boardEditor';
 
 // ── Move tree ──────────────────────────────────────────────────────────────────
 //
@@ -114,26 +115,7 @@ export function mainLine(root: MoveNode): MoveNode[] {
 export function movePieceInFen(fen: string, from: string, to: string, pieceChar: string): string {
   const f = fenFields(fen);
   if (!f) return fen;
-  const grid = f.placement.split('/').map((rank) => {
-    const row: string[] = [];
-    for (const ch of rank) {
-      if (ch >= '1' && ch <= '8') for (let i = 0; i < parseInt(ch); i++) row.push('.');
-      else row.push(ch);
-    }
-    return row;
-  });
-  const col = (file: string) => file.charCodeAt(0) - 97;
-  const row = (rank: string) => 8 - parseInt(rank);
-  grid[row(from[1])][col(from[0])] = '.';
-  grid[row(to[1])][col(to[0])] = pieceChar;
-  const newBoard = grid
-    .map((r) => r.reduce((s, ch) => {
-      if (ch === '.') {
-        const last = s[s.length - 1];
-        return last >= '1' && last <= '8' ? s.slice(0, -1) + (parseInt(last) + 1) : s + '1';
-      }
-      return s + ch;
-    }, ''))
-    .join('/');
-  return fenFromFields({ ...f, placement: newBoard });
+  const cleared = setPieceAt(f.placement, from, null);
+  const placed = setPieceAt(cleared, to, pieceChar);
+  return fenFromFields({ ...f, placement: placed });
 }

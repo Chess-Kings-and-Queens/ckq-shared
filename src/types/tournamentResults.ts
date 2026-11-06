@@ -13,6 +13,8 @@ import type {
 
 // Moved from website2.0 src/app/utils/onlineTournamentResultLabels.ts.
 export type TiebreakKey = "points" | "sb" | "wins" | "name";
+/** The order standings are tie-broken in (live-classroom-server standings.js and backend-2.0 onlineTournament.service.js mirror it). */
+export const TIEBREAK_ORDER: readonly TiebreakKey[] = ["points", "sb", "wins", "name"];
 export type PlayerOutcome = "win" | "loss" | "draw" | null;
 /** A finished game's PGN result. Named `TournamentGameResult` because `GameResult` is already the
  * package's game-end type (gameOutcome.ts); website2.0 re-exports it under its old name. */

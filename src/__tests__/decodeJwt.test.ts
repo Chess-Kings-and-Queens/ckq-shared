@@ -1,4 +1,4 @@
-import { decodeJwtRole, getPostLoginRedirect } from '../decodeJwt';
+import { decodeJwtPayload, decodeJwtRole, getPostLoginRedirect, isAdminRole, isStaffRole } from '../decodeJwt';
 
 /** Builds a syntactically valid (unsigned) JWT string with the given payload. */
 function makeToken(payload: unknown, opts?: { omitSignature?: boolean }): string {
@@ -80,5 +80,48 @@ describe('getPostLoginRedirect', () => {
 
   test('defaults null role to the portal dashboard', () => {
     expect(getPostLoginRedirect(null)).toBe('/portal/dashboard');
+  });
+});
+
+describe('decodeJwtPayload', () => {
+  /** Hand-built segment so the test does not depend on Buffer's base64url output. */
+  const segment = (json: string): string => Buffer.from(json, 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+  test('decodes a payload whose base64url contains "-" and "_" and needs padding', () => {
+    // ">>>" encodes to "Pj4+" and "???" to "Pz8/" in base64; the 14-byte JSON leaves the unpadded segment 3 mod 4.
+    const json = '{"s":">>>???"}';
+    const encoded = segment(json);
+    expect(encoded).toContain('Pj4-');
+    expect(encoded).toContain('Pz8_');
+    expect(encoded.length % 4).toBe(3);
+    expect(decodeJwtPayload(`h.${encoded}.s`)).toEqual({ s: '>>>???' });
+  });
+
+  test('returns the typed object for a plain payload', () => {
+    expect(decodeJwtPayload<{ role: string; exp: number }>(makeToken({ role: 'coach', exp: 123 }))).toEqual({ role: 'coach', exp: 123 });
+  });
+
+  test('returns null for a malformed token, an empty payload segment and invalid JSON', () => {
+    expect(decodeJwtPayload('not-a-jwt')).toBeNull();
+    expect(decodeJwtPayload('h..s')).toBeNull();
+    expect(decodeJwtPayload('h.bm90LWpzb24.s')).toBeNull();
+    expect(decodeJwtPayload('')).toBeNull();
+  });
+});
+
+describe('isAdminRole / isStaffRole', () => {
+  test.each([
+    ['superadmin', true, true],
+    ['admin', true, true],
+    ['coach', false, true],
+    ['parent', false, false],
+    ['student', false, false],
+    ['unknown', false, false],
+    ['', false, false],
+    [null, false, false],
+    [undefined, false, false],
+  ] as const)('%s -> admin %s, staff %s', (role, admin, staff) => {
+    expect(isAdminRole(role)).toBe(admin);
+    expect(isStaffRole(role)).toBe(staff);
   });
 });

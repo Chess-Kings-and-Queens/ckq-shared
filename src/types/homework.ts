@@ -130,7 +130,7 @@ export interface SubmitHomeworkMoveResult {
 export interface CreateHomeworkResultInput {
   materialCollectionId: string;
   groupClassSessionId?: string;
-  materials: Array<{ materialId: string; totalPositions: number }>;
+  materials: Array<{ materialId: string; /** @deprecated The server derives it from the material PGN (duplication cleanup, D8); omit. */ totalPositions?: number }>;
 }
 
 /** Body of PUT /homework-result/:id/move. The server grades `moves` and measures the time (ADR backend-024, backend-029); any other key is a 400. */
@@ -197,3 +197,14 @@ export interface ProgressReportResponse {
   status: "success";
   data: HomeworkRow[];
 }
+
+/** The 409 codes the homework/workbook/curriculum position routes answer with (message = code). */
+export const HOMEWORK_CONFLICT_CODES = ['position-not-open', 'version-conflict', 'max_attempts_reached', 'position-out-of-order', 'already_completed'] as const;
+export type HomeworkConflictCode = (typeof HOMEWORK_CONFLICT_CODES)[number];
+/** The conflict code of a 409 response, or null for any other status or message. */
+export function homeworkConflictCode(status: number | null | undefined, message: unknown): HomeworkConflictCode | null {
+  if (status !== 409 || typeof message !== 'string') return null;
+  return (HOMEWORK_CONFLICT_CODES as readonly string[]).includes(message) ? (message as HomeworkConflictCode) : null;
+}
+/** Optional keys the workbook/curriculum move responses carry beside the result document (backend D9). */
+export interface PositionSubmissionOutcome { positionDone?: boolean; attemptsLeft?: number; nextPositionIndex?: number | null }

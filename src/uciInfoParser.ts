@@ -51,29 +51,40 @@ export function uciToSan(fen: string, uciMoves: string[]): string[] {
   return sans;
 }
 
+/** A UCI `info` line as parsed from the raw text. */
+export interface RawInfoLine { depth: number; multipv: number; scoreCp: number | null; mateIn: number | null; uciMoves: string[]; nodes: number | null; nps: number | null; time: number | null }
+
+/** A UCI `info` line as the engine reports it: score from the side to move, no SAN. null unless it carries depth, score and pv. */
+export function parseUciInfoRaw(line: string): RawInfoLine | null {
+  if (!line.startsWith('info ')) return null;
+  const depth = extractInt(line, 'depth');
+  const multipv = extractInt(line, 'multipv') ?? 1;
+  const scoreMatch = line.match(/\bscore\s+(cp|mate)\s+(-?\d+)/);
+  if (!scoreMatch) return null;
+  const scoreValue = parseInt(scoreMatch[2], 10);
+  const pvIndex = line.indexOf(' pv ');
+  if (pvIndex === -1) return null;
+  const uciMoves = line.slice(pvIndex + 4).trim().split(/\s+/).filter(Boolean);
+  if (!depth || uciMoves.length === 0) return null;
+  return { depth, multipv, scoreCp: scoreMatch[1] === 'cp' ? scoreValue : null, mateIn: scoreMatch[1] === 'mate' ? scoreValue : null, uciMoves, nodes: extractInt(line, 'nodes'), nps: extractInt(line, 'nps'), time: extractInt(line, 'time') };
+}
+
+/** The move a `bestmove` line names, or null for `(none)`/malformed. */
+export function parseBestmove(line: string): string | null {
+  if (!line.startsWith('bestmove')) return null;
+  const uci = line.split(/\s+/)[1];
+  return !uci || uci === '(none)' ? null : uci;
+}
+
 /** Format a Stockfish `info` line into a structured EngineLine. Returns null for non-`info` or unparsable lines. */
 export function parseInfoLine(
   line: string,
   fen: string,
 ): { rank: number; data: Omit<EngineLine, 'rank'> } | null {
-  if (!line.startsWith('info ')) return null;
+  const raw = parseUciInfoRaw(line);
+  if (!raw) return null;
 
-  const depth   = extractInt(line, 'depth');
-  const multipv = extractInt(line, 'multipv') ?? 1;
-
-  const scoreMatch = line.match(/\bscore\s+(cp|mate)\s+(-?\d+)/);
-  if (!scoreMatch) return null;
-
-  const scoreType  = scoreMatch[1] as 'cp' | 'mate';
-  const scoreValue = parseInt(scoreMatch[2], 10);
-
-  const pvIndex = line.indexOf(' pv ');
-  if (pvIndex === -1) return null;
-
-  const uciMoves = line.slice(pvIndex + 4).trim().split(/\s+/).filter(Boolean);
-  if (!depth || uciMoves.length === 0) return null;
-
-  const sanMoves = uciToSan(fen, uciMoves);
+  const sanMoves = uciToSan(fen, raw.uciMoves);
   const { color: startColor, fullMove: startFullMove } = fenMoveContext(fen);
 
   // Stockfish reports score from the side-to-move perspective.
@@ -81,13 +92,13 @@ export function parseInfoLine(
   const whitePov = startColor === 'b' ? -1 : 1;
 
   return {
-    rank: multipv,
+    rank: raw.multipv,
     data: {
-      scoreCp:  scoreType === 'cp'   ? scoreValue * whitePov : null,
-      mateIn:   scoreType === 'mate' ? scoreValue * whitePov : null,
-      uciMoves,
+      scoreCp:  raw.scoreCp !== null ? raw.scoreCp * whitePov : null,
+      mateIn:   raw.mateIn !== null ? raw.mateIn * whitePov : null,
+      uciMoves: raw.uciMoves,
       sanMoves,
-      depth,
+      depth: raw.depth,
       startColor,
       startFullMove,
     },

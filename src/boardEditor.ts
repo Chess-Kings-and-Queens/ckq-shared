@@ -17,6 +17,12 @@ export interface PositionDraft {
 export type PositionValidity = { ok: true } | { ok: false; reason: string };
 
 const FILES = 'abcdefgh';
+
+/** 0-based file and rank of an algebraic square ('a1' → {file:0, rank:0}); null when malformed. */
+export function squareToFileRank(square: string): { file: number; rank: number } | null {
+  if (!/^[a-h][1-8]$/.test(square)) return null;
+  return { file: square.charCodeAt(0) - 97, rank: Number(square[1]) - 1 };
+}
 const PIECE_LETTERS = 'kqrbnpKQRBNP';
 
 /** Placement → Map<square, letter>; a malformed placement returns null. */

@@ -1,6 +1,6 @@
 // @ckq/shared — pure TypeScript logic and API contract types shared between
 // website2.0 and ckq-mobile. No React/DOM/React Native imports allowed here
-// (lint-enforced — see .eslintrc.json and scripts/check-no-dom-globals.js).
+// (lint-enforced — see .eslintrc.json).
 
 export * from './quizEvaluator';
 export * from './chessGame';
@@ -43,3 +43,9 @@ export * from './types/uscfTournaments';
 export * from './types/tablebase';
 export * from './types/trail';
 export * from './trailGeometry';
+export * from './types/api';
+export * from './names';
+export * from './labels';
+export * from './missionAppend';
+export * from './dates';
+export * from './onlineTournamentWindow';
