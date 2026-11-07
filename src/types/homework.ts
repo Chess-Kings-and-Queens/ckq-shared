@@ -1,3 +1,5 @@
+import type { HomeworkJudgeOutcome } from '../engineJudge';
+
 // ── Homework API contract ────────────────────────────────────────────────────
 //
 // Validated field by field against backend-2.0 on 2026-10-23
@@ -72,6 +74,8 @@ export interface HomeworkPuzzlePayload extends HomeworkStrikeStatus {
   materialCollectionId: string;
   groupClassSessionId: string | null;
   homeworkMaterialId: string;
+  /** The engine judge applies to this homework: the global switch AND the collection's flag (homework engine judge D1, D12). */
+  engineJudge: boolean;
 }
 
 /** GET /homework/:id/lesson (homework.service.js getLessonContent). pgnContent and videoUrl may be "" for a video-only or PGN-only lesson. */
@@ -123,6 +127,8 @@ export interface SubmitHomeworkMoveResult {
   positionDone: boolean;
   attemptsLeft: number;
   nextPositionIndex: number | null;
+  /** The engine judge's outcome for this attempt; null when no judge ran (correct by the PGN, switch off, no deviation, engine unavailable). */
+  judge: HomeworkJudgeOutcome | null;
   duplicate?: true;
 }
 

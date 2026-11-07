@@ -98,3 +98,37 @@ export function gradePositionAttempt(pgn: string, sans: string[]): PositionGrade
   if (evaluated.result === MoveResult.Incorrect) return { isCorrect: false, score: evaluated.score, result: evaluated.result, correctPlayerMoves };
   return { isCorrect: false, score: 0, result: evaluated.result, correctPlayerMoves };
 }
+
+export type PlyDeviation = {
+  /** Index into the SANs (and the solution plies) of the first mismatch. */
+  ply: number;
+  /** The position the student saw before that ply. */
+  fenBefore: string;
+  /** The solution's SAN at that ply. */
+  givenSan: string;
+  /** The student's SAN at that ply. */
+  studentSan: string;
+};
+
+/**
+ * The first student move that differs from the solution, for the engine judge (homework D3).
+ * Null when the moves match the solution as far as they go, when there are no moves, or when the
+ * first mismatch falls on an opponent ply (a real client auto-plays those from the solution).
+ * Throws `Error('Invalid quiz PGN')` like `QuizEvaluator`.
+ */
+export function firstDeviation(pgn: string, sans: readonly string[]): PlyDeviation | null {
+  const evaluator = new QuizEvaluator(pgn, 100);
+  const limit = Math.min(sans.length, evaluator.quizMoves.length);
+  for (let i = 0; i < limit; i++) {
+    const expected = evaluator.quizMoves[i];
+    if (sans[i] === expected.san) continue;
+    if (expected.turn !== evaluator.playerColor) return null;
+    return {
+      ply: i,
+      fenBefore: i === 0 ? evaluator.startFen : evaluator.quizMoves[i - 1].fen,
+      givenSan: expected.san,
+      studentSan: sans[i],
+    };
+  }
+  return null;
+}

@@ -3,6 +3,7 @@ import {
   reducePuzzleAttempt,
   PuzzleAttemptState,
   BRIEF_CORRECT_OVERLAY_MS,
+  JUDGED_ADVANCE_MS,
 } from '../puzzleAttemptReducer';
 
 // Helper: build a "playing, mid-timer" state directly, without going through
@@ -543,4 +544,112 @@ describe('item 7 — Continue', () => {
 
 it('BRIEF_CORRECT_OVERLAY_MS is 500 ms', () => {
   expect(BRIEF_CORRECT_OVERLAY_MS).toBe(500);
+});
+
+// ── Homework engine judge: 'judging' phase and JUDGED event ──────────────────
+
+describe('PLAYER_MOVE incorrect with awaitJudge', () => {
+  const incorrect = { type: 'PLAYER_MOVE', san: 'd4', result: 'incorrect', score: 0, elapsedWallClockSeconds: 7 } as const;
+
+  test('enters judging with the same RECORD and NOTIFY_IN_PROGRESS effects', () => {
+    const state = playingState({ secondsLeft: 100 });
+    const withJudge = reducePuzzleAttempt(state, { ...incorrect, awaitJudge: true });
+    const without = reducePuzzleAttempt(state, incorrect);
+    expect(withJudge.state.phase).toBe('judging');
+    expect(withJudge.state.moves).toEqual(['d4']);
+    expect(withJudge.effects).toEqual(without.effects);
+    expect(withJudge.effects.map((e) => e.type)).toEqual(['NOTIFY_IN_PROGRESS', 'RECORD']);
+  });
+
+  test('without awaitJudge it resolves incorrect-pending (unchanged)', () => {
+    const { state: next } = reducePuzzleAttempt(playingState(), incorrect);
+    expect(next.phase).toBe('resolved-incorrect-pending');
+  });
+
+  test('also enters judging from brief-correct', () => {
+    const { state: next } = reducePuzzleAttempt(playingState({ phase: 'brief-correct' }), { ...incorrect, awaitJudge: true });
+    expect(next.phase).toBe('judging');
+  });
+
+  test('awaitJudge has no effect on a correct move', () => {
+    const { state: next } = reducePuzzleAttempt(playingState(), {
+      type: 'PLAYER_MOVE', san: 'e4', result: 'correct', elapsedWallClockSeconds: 3,
+    });
+    expect(next.phase).toBe('resolved-correct');
+  });
+
+  test('awaitJudge has no effect on a pending move', () => {
+    const { state: next } = reducePuzzleAttempt(playingState(), {
+      type: 'PLAYER_MOVE', san: 'e4', result: 'pending', opponentSan: 'e5',
+    });
+    expect(next.phase).toBe('brief-correct');
+  });
+});
+
+describe('judging phase', () => {
+  const judging = (): PuzzleAttemptState => playingState({ phase: 'judging', secondsLeft: 1, moves: ['d4'] });
+
+  test('TICK is a no-op (no timeout, no second RECORD)', () => {
+    const state = judging();
+    const { state: next, effects } = reducePuzzleAttempt(state, { type: 'TICK' });
+    expect(next).toEqual(state);
+    expect(effects).toEqual([]);
+  });
+
+  test('PLAYER_MOVE is a no-op', () => {
+    const state = judging();
+    const { state: next, effects } = reducePuzzleAttempt(state, {
+      type: 'PLAYER_MOVE', san: 'e4', result: 'correct', elapsedWallClockSeconds: 1,
+    });
+    expect(next).toEqual(state);
+    expect(effects).toEqual([]);
+  });
+
+  test('RETRY_DECISION is a no-op', () => {
+    const state = judging();
+    const { state: next, effects } = reducePuzzleAttempt(state, { type: 'RETRY_DECISION', canRetry: true });
+    expect(next).toEqual(state);
+    expect(effects).toEqual([]);
+  });
+});
+
+describe('JUDGED', () => {
+  test('credited resolves correct with one SCHEDULE advance at the given delay', () => {
+    const state = playingState({ phase: 'judging', moves: ['d4'] });
+    const { state: next, effects } = reducePuzzleAttempt(state, { type: 'JUDGED', credited: true, advanceDelayMs: 2500 });
+    expect(next.phase).toBe('resolved-correct');
+    expect(next.moves).toEqual(['d4']);
+    expect(effects).toEqual([{ type: 'SCHEDULE', kind: 'advance', delayMs: 2500 }]);
+  });
+
+  test('credited honours a different delay', () => {
+    const { effects } = reducePuzzleAttempt(playingState({ phase: 'judging' }), { type: 'JUDGED', credited: true, advanceDelayMs: 1200 });
+    expect(effects).toEqual([{ type: 'SCHEDULE', kind: 'advance', delayMs: 1200 }]);
+  });
+
+  test('not credited resolves incorrect-pending with no effects, then RETRY_DECISION works', () => {
+    const state = playingState({ phase: 'judging', moves: ['d4'] });
+    const { state: pending, effects } = reducePuzzleAttempt(state, { type: 'JUDGED', credited: false, advanceDelayMs: 2500 });
+    expect(pending.phase).toBe('resolved-incorrect-pending');
+    expect(effects).toEqual([]);
+    const retry = reducePuzzleAttempt(pending, { type: 'RETRY_DECISION', canRetry: true });
+    expect(retry.state.phase).toBe('resolved-incorrect-retry');
+    expect(retry.effects).toEqual([{ type: 'SCHEDULE', kind: 'retry-reset', delayMs: 1200 }]);
+    const final = reducePuzzleAttempt(pending, { type: 'RETRY_DECISION', canRetry: false });
+    expect(final.state.phase).toBe('resolved-incorrect-final');
+  });
+
+  test.each(['playing', 'brief-correct', 'resolved-correct', 'resolved-incorrect-pending', 'resolved-incorrect-retry', 'resolved-incorrect-final'] as const)(
+    'is a no-op from %s',
+    (phase) => {
+      const state = playingState({ phase });
+      const { state: next, effects } = reducePuzzleAttempt(state, { type: 'JUDGED', credited: true, advanceDelayMs: 2500 });
+      expect(next).toEqual(state);
+      expect(effects).toEqual([]);
+    },
+  );
+});
+
+it('JUDGED_ADVANCE_MS is 2500 ms', () => {
+  expect(JUDGED_ADVANCE_MS).toBe(2500);
 });

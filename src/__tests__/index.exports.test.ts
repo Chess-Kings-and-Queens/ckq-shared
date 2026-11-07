@@ -59,9 +59,20 @@ const NEW_RUNTIME_EXPORTS = [
   'computeFireTime',
   'DEFAULT_JOIN_WINDOW_MINUTES',
   'joinWindowOpensAt',
+  // engineJudge.ts
+  'JUDGE_VERDICTS',
+  'CREDITED_VERDICTS',
+  'isCreditedVerdict',
+  'JUDGE_VERDICT_MESSAGES',
+  'ACCEPTABLE_CREDIT',
+  'judgedScore',
+  // quizEvaluator.ts
+  'firstDeviation',
+  // puzzleAttemptReducer.ts
+  'JUDGED_ADVANCE_MS',
 ] as const;
 
-describe('package root exports (v0.33.0)', () => {
+describe('package root exports (v0.34.0)', () => {
   test.each(NEW_RUNTIME_EXPORTS)('%s is exported from the barrel', (name) => {
     expect((shared as Record<string, unknown>)[name]).toBeDefined();
   });

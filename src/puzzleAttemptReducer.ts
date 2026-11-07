@@ -36,6 +36,7 @@ import { computeTimeTaken } from './homeworkSession';
 //                                    entered when the puzzle's FINAL move is
 //                                    correct — that goes straight to
 //                                    'resolved-correct'.
+//   'judging'                     — an incorrect preview the server may still credit (homework engine judge, D11). Entered from 'playing'/'brief-correct' by a PLAYER_MOVE 'incorrect' with awaitJudge; left by JUDGED. Timer ticks are ignored (the server already measured the time).
 //   'resolved-correct'            — `quizDone && quizResult === 'correct'`.
 //                                    Always auto-advances; there is no retry
 //                                    concept for a correct answer.
@@ -102,6 +103,7 @@ import { computeTimeTaken } from './homeworkSession';
 export type PuzzlePhase =
   | 'playing'
   | 'brief-correct'
+  | 'judging'
   | 'resolved-correct'
   | 'resolved-incorrect-pending'
   | 'resolved-incorrect-retry'
@@ -173,6 +175,8 @@ export type PuzzleAttemptEvent =
       result: 'incorrect';
       score: number;
       elapsedWallClockSeconds: number;
+      /** true when the server may credit this move with the engine judge: the attempt waits in 'judging' instead of resolving incorrect. */
+      awaitJudge?: boolean;
     }
   /** The student's move was correct so far but the sequence is not resolved
    *  yet — lines 258-268 (mid-sequence correct, `opponentSan` present) and the
@@ -207,6 +211,13 @@ export type PuzzleAttemptEvent =
    */
   | { type: 'RETRY_RESET' }
   /**
+   * The server's grade for an attempt in 'judging' (homework engine judge, D11). `credited` → the
+   * attempt resolves correct and auto-advances after `advanceDelayMs`; not credited → it resolves
+   * incorrect, and the adapter sends RETRY_DECISION as for any incorrect outcome. A no-op from any
+   * other phase.
+   */
+  | { type: 'JUDGED'; credited: boolean; advanceDelayMs: number }
+  /**
    * Continue button click (`PuzzleBoard.tsx` lines 352-355, only reachable
    * from `'resolved-incorrect-final'`). Modeled as a pass-through no-op
    * rather than omitted from the union entirely, so a caller's exhaustive
@@ -222,6 +233,9 @@ export type PuzzleAttemptEvent =
  *  in ms. Short so the board is visible again right after the opponent's reply
  *  (owner decision 2026-10-21, board-feedback-and-level-gated-move-hints-plan.md D1). */
 export const BRIEF_CORRECT_OVERLAY_MS = 500;
+
+/** How long a judged credit stays on screen before auto-advancing, in ms: long enough to read the verdict message (D17). A plain correct answer advances at 1200 ms. */
+export const JUDGED_ADVANCE_MS = 2500;
 
 /**
  * Side-effect intents this reducer emits. The reducer decides what SHOULD
@@ -288,6 +302,8 @@ export function reducePuzzleAttempt(
       return handleRetryDecision(state, event);
     case 'RETRY_RESET':
       return handleRetryReset(state);
+    case 'JUDGED':
+      return handleJudged(state, event);
     case 'CONTINUE':
       return { state, effects: [] };
   }
@@ -362,7 +378,7 @@ function handlePlayerMove(
       { type: 'NOTIFY_IN_PROGRESS', inProgress: false }, // line 215 — same shared branch as the correct path
       { type: 'RECORD', result: 'incorrect', timeTaken, moves, score: event.score }, // line 247 — opaque evaluator score
     ];
-    return { state: { ...state, phase: 'resolved-incorrect-pending', moves }, effects };
+    return { state: { ...state, phase: event.awaitJudge ? 'judging' : 'resolved-incorrect-pending', moves }, effects };
   }
 
   // event.result === 'pending'
@@ -420,6 +436,20 @@ function handleRetryDecision(
     ? [{ type: 'SCHEDULE', kind: 'retry-reset', delayMs: 1200 }]
     : [];
   return { state: { ...state, phase }, effects };
+}
+
+function handleJudged(
+  state: PuzzleAttemptState,
+  event: Extract<PuzzleAttemptEvent, { type: 'JUDGED' }>,
+): PuzzleAttemptTransition {
+  if (state.phase !== 'judging') return { state, effects: [] };
+  if (event.credited) {
+    return {
+      state: { ...state, phase: 'resolved-correct' },
+      effects: [{ type: 'SCHEDULE', kind: 'advance', delayMs: event.advanceDelayMs }],
+    };
+  }
+  return { state: { ...state, phase: 'resolved-incorrect-pending' }, effects: [] };
 }
 
 /** Item 6 — the retry-reset logic, `PuzzleBoard.tsx` lines 104-121. */
