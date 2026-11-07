@@ -3,6 +3,7 @@
 // (lint-enforced — see .eslintrc.json).
 
 export * from './quizEvaluator';
+export * from './engineJudge';
 export * from './chessGame';
 export * from './boardStatus';
 export * from './chessUtils';

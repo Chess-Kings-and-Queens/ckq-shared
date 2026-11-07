@@ -1,4 +1,4 @@
-import { QuizEvaluator, MoveResult, gradePositionAttempt } from '../quizEvaluator';
+import { QuizEvaluator, MoveResult, gradePositionAttempt, firstDeviation } from '../quizEvaluator';
 import { gradePositionAttempt as gradePositionAttemptFromBarrel } from '../index';
 import { buildQuizPgn, START_FEN } from '../chessUtils';
 
@@ -392,6 +392,93 @@ describe('gradePositionAttempt', () => {
       expect(g.result).toBe(last.result);
       expect(g.score).toBe(last.result === MoveResult.Correct || last.result === MoveResult.Incorrect ? last.score : 0);
       expect(g.correctPlayerMoves).toBe(last.correctPlayerMoves);
+    });
+  });
+});
+
+// ─── firstDeviation ───────────────────────────────────────────────────────────
+
+describe('firstDeviation', () => {
+  const THREE_PLY_PGN = '1. e4 e5 2. Nf3';
+  const FEN_AFTER_E4_E5 = 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2';
+  const TAGGED_PGN = buildQuizPgn(FEN_AFTER_E4, ['e5', 'Nf3', 'Nc6']);
+
+  test('first-move deviation returns ply 0 with the start FEN (no [FEN] tag)', () => {
+    expect(firstDeviation(THREE_PLY_PGN, ['d4'])).toEqual({
+      ply: 0,
+      fenBefore: START_FEN,
+      givenSan: 'e4',
+      studentSan: 'd4',
+    });
+  });
+
+  test('first-move deviation returns the [FEN] tag position', () => {
+    expect(firstDeviation(TAGGED_PGN, ['c5'])).toEqual({
+      ply: 0,
+      fenBefore: FEN_AFTER_E4,
+      givenSan: 'e5',
+      studentSan: 'c5',
+    });
+  });
+
+  test('second player move deviation returns ply 2 with the FEN after ply 1', () => {
+    expect(firstDeviation(THREE_PLY_PGN, ['e4', 'e5', 'Nc3'])).toEqual({
+      ply: 2,
+      fenBefore: FEN_AFTER_E4_E5,
+      givenSan: 'Nf3',
+      studentSan: 'Nc3',
+    });
+  });
+
+  test('a black-to-move puzzle: the player is black and ply 2 is judged', () => {
+    const pgn = buildQuizPgn(FEN_AFTER_E4, ['e5', 'Nf3', 'Nc6']);
+    const dev = firstDeviation(pgn, ['e5', 'Nf3', 'Nf6']);
+    expect(dev).not.toBeNull();
+    expect(dev?.ply).toBe(2);
+    expect(dev?.givenSan).toBe('Nc6');
+    expect(dev?.studentSan).toBe('Nf6');
+    expect(firstDeviation(pgn, ['c5'])?.fenBefore).toBe(FEN_AFTER_E4);
+  });
+
+  test('a full match returns null', () => {
+    expect(firstDeviation(THREE_PLY_PGN, ['e4', 'e5', 'Nf3'])).toBeNull();
+  });
+
+  test('empty moves return null', () => {
+    expect(firstDeviation(THREE_PLY_PGN, [])).toBeNull();
+  });
+
+  test('a matching prefix shorter than the solution returns null', () => {
+    expect(firstDeviation(THREE_PLY_PGN, ['e4', 'e5'])).toBeNull();
+  });
+
+  test('a mismatch on an opponent ply returns null', () => {
+    expect(firstDeviation(THREE_PLY_PGN, ['e4', 'c5'])).toBeNull();
+  });
+
+  test('invalid PGN throws', () => {
+    expect(() => firstDeviation('garbage not a pgn {{{', ['e4'])).toThrow('Invalid quiz PGN');
+  });
+
+  describe('parity with gradePositionAttempt', () => {
+    // onPlayerPly: the first mismatch (if any) falls on a player ply.
+    const cases: Array<{ sans: string[]; onPlayerPly: boolean }> = [
+      { sans: [], onPlayerPly: false },
+      { sans: ['e4'], onPlayerPly: false },
+      { sans: ['e4', 'e5'], onPlayerPly: false },
+      { sans: ['e4', 'e5', 'Nf3'], onPlayerPly: false },
+      { sans: ['d4'], onPlayerPly: true },
+      { sans: ['d4', 'e5', 'Nf3'], onPlayerPly: true },
+      { sans: ['e4', 'e5', 'Nc3'], onPlayerPly: true },
+      { sans: ['e4', 'c5'], onPlayerPly: false },
+      { sans: ['e4', 'c5', 'Nf3'], onPlayerPly: false },
+      { sans: ['e4', 'e5', 'Nf3', 'Nc6'], onPlayerPly: false },
+    ];
+
+    test.each(cases)('%j', ({ sans, onPlayerPly }) => {
+      const graded = gradePositionAttempt(THREE_PLY_PGN, sans);
+      const deviation = firstDeviation(THREE_PLY_PGN, sans);
+      expect(deviation !== null).toBe(graded.result === MoveResult.Incorrect && onPlayerPly);
     });
   });
 });
