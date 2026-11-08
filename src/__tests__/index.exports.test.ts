@@ -72,7 +72,7 @@ const NEW_RUNTIME_EXPORTS = [
   'JUDGED_ADVANCE_MS',
 ] as const;
 
-describe('package root exports (v0.34.0)', () => {
+describe('package root exports (v0.34.1)', () => {
   test.each(NEW_RUNTIME_EXPORTS)('%s is exported from the barrel', (name) => {
     expect((shared as Record<string, unknown>)[name]).toBeDefined();
   });

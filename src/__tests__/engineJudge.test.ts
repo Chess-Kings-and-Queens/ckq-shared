@@ -58,3 +58,17 @@ describe('JUDGE_VERDICT_MESSAGES', () => {
     expect(JUDGE_VERDICT_MESSAGES.exact).toBeUndefined();
   });
 });
+
+describe('judge constants are frozen at runtime (D23)', () => {
+  test('JUDGE_VERDICTS is frozen', () => {
+    expect(Object.isFrozen(JUDGE_VERDICTS)).toBe(true);
+  });
+
+  test('CREDITED_VERDICTS is frozen', () => {
+    expect(Object.isFrozen(CREDITED_VERDICTS)).toBe(true);
+  });
+
+  test('JUDGE_VERDICT_MESSAGES is frozen', () => {
+    expect(Object.isFrozen(JUDGE_VERDICT_MESSAGES)).toBe(true);
+  });
+});
