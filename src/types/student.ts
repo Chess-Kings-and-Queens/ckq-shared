@@ -611,6 +611,25 @@ export interface StudentPrivateClassEnrollmentSummary {
   nextSession: { _id: string; startDate: string; endDate: string } | null;
 }
 
+/** A booked makeup group class still in progress or upcoming (backend-computed; group-class-makeup-reschedule-plan §5.15). */
+export interface PortalMakeupClass {
+  sessionId: string;
+  scheduleId: string;
+  date: string;        // ET YYYY-MM-DD
+  startsAt: string;    // ISO
+  endsAt: string;      // ISO
+  label: string;       // "Today" | "Tomorrow" | weekday | "MMM D" — classDayLabel
+  timeLabel: string;   // ET "h:mm A – h:mm A ET"
+  isToday: boolean;
+  isNext: boolean;     // D18
+  levelName: string;
+  coachName: string;
+  locationName: string; // "Online" or the location name
+  isOnline: boolean;
+  classLink: string | null;
+  forLabel: string;    // ET "ddd, MMM D" of the class it makes up for
+}
+
 /**
  * The full enriched student profile — `buildStudentProfile`'s return
  * (student.service.js ~lines 451-464), spread over the base `select`
@@ -644,6 +663,7 @@ export interface PortalStudent {
   /** The schedule whose `nextClass` the home screen leads with (hybrid home schedule first); null when none. */
   nextScheduleId: string | null;
   classWeek: ClassWeek;
+  makeupClasses: PortalMakeupClass[];
 }
 
 /** GET /student/details (parent portal) response envelope. */
