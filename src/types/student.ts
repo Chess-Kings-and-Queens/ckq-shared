@@ -621,13 +621,33 @@ export interface PortalMakeupClass {
   label: string;       // "Today" | "Tomorrow" | weekday | "MMM D" — classDayLabel
   timeLabel: string;   // ET "h:mm A – h:mm A ET"
   isToday: boolean;
-  isNext: boolean;     // D18
   levelName: string;
   coachName: string;
   locationName: string; // "Online" or the location name
   isOnline: boolean;
   classLink: string | null;
   forLabel: string;    // ET "ddd, MMM D" of the class it makes up for
+  forDate: string;     // ET YYYY-MM-DD of the covered class; '' when its record is gone
+  forScheduleId: string; // '' when gone
+}
+
+/** The one session the student attends next, chosen by the backend from own, makeup and trial sessions (group-class-makeup-reschedule-plan D26). */
+export interface NextSession {
+  kind: 'regular' | 'makeup' | 'trial';
+  sessionId: string;
+  scheduleId: string;
+  date: string;        // ET YYYY-MM-DD
+  startsAt: string;    // ISO
+  endsAt: string;      // ISO
+  isToday: boolean;
+  label: string;       // classDayLabel
+  timeLabel: string;   // ET "h:mm A – h:mm A ET"
+  levelName: string;
+  coachName: string;
+  locationName: string; // "Online" or the location name
+  isOnline: boolean;
+  classLink: string | null;
+  forLabel: string;    // makeup only: ET "ddd, MMM D" of the class it makes up for; '' otherwise
 }
 
 /**
@@ -664,6 +684,8 @@ export interface PortalStudent {
   nextScheduleId: string | null;
   classWeek: ClassWeek;
   makeupClasses: PortalMakeupClass[];
+  /** The single source for what the student attends next; `nextScheduleId` and each schedule's `nextClass` are views of the same list. */
+  nextSession: NextSession | null;
 }
 
 /** GET /student/details (parent portal) response envelope. */
