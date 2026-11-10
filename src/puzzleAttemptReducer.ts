@@ -182,7 +182,8 @@ export type PuzzleAttemptEvent =
    *  yet — lines 258-268 (mid-sequence correct, `opponentSan` present) and the
    *  implicit unreachable else-branch (no `opponentSan`) covered by item 5 of
    *  the transition table this module was built from. */
-  | { type: 'PLAYER_MOVE'; san: string; result: 'pending'; opponentSan?: string }
+  /** `correctSoFar` — a both-sides puzzle (D10): the ply matched the solution and there is no opponent reply to wait for; the brief ✓ shows and play continues. */
+  | { type: 'PLAYER_MOVE'; san: string; result: 'pending'; opponentSan?: string; correctSoFar?: boolean }
   /**
    * The adapter has applied the opponent's delayed reply to the board and
    * evaluator (`PuzzleBoard.tsx` lines 263-266, inside the 400ms
@@ -393,11 +394,16 @@ function handlePlayerMove(
     };
   }
 
-  // Item 5 — the implicit, structurally-unreachable else-branch (`pending`
-  // with no `opponentSan`). Preserved as a TRUE no-op: no phase change, no
-  // effects. (The move is still folded into `moves` because that append at
-  // line 209 is unconditional in the original — but that's a moves-array
-  // fact, not a "phase change.")
+  // Item 5 — `pending` with no `opponentSan`. Reachable under both-sides (D10) for every
+  // mid-line correct ply: `correctSoFar` shows the brief ✓ and play continues (phase stays
+  // 'playing', nothing to wait for). Without the flag it is still the legacy TRUE no-op: no phase
+  // change, no effects (the move is only folded into `moves`).
+  if (event.correctSoFar === true) {
+    return {
+      state: { ...state, moves },
+      effects: [{ type: 'SCHEDULE', kind: 'clear-brief', delayMs: BRIEF_CORRECT_OVERLAY_MS }],
+    };
+  }
   return { state: { ...state, moves }, effects: [] };
 }
 
