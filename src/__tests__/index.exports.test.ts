@@ -6,6 +6,9 @@ const NEW_RUNTIME_EXPORTS = [
   'expandOpponentVariations',
   'puzzleLineProgress',
   'PUZZLE_TYPES',
+  // moveTree.ts
+  'treeToPgn',
+  'subtreePgn',
   // types/liveboard.ts
   'QUIZ_VERDICTS',
   'QUIZ_MOVE_RESULT_STATUSES',

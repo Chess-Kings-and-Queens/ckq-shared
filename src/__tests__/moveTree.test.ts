@@ -1,4 +1,4 @@
-import { createRoot, buildTreeFromPgn, movePieceInFen, parsePgnTree, mainLine, type MoveNode } from '../moveTree';
+import { createRoot, buildTreeFromPgn, movePieceInFen, parsePgnTree, mainLine, treeToPgn, subtreePgn, type MoveNode } from '../moveTree';
 import { START_FEN } from '../chessUtils';
 
 describe('createRoot', () => {
@@ -201,5 +201,83 @@ describe('mainLine', () => {
     expect(root).not.toBeNull();
     if (!root) return;
     expect(mainLine(root).map((n) => n.san)).toEqual(['e4', 'e5', 'Nf3']);
+  });
+});
+
+const VAR_PGN = `[FEN "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"]
+[SetUp "1"]
+
+1. e4 e5 (1... c5 2. Nf3 d6 (2... Nc6 3. d4)) (1... e6 2. d4) 2. Nf3 Nc6 (2... d6 3. d4) 3. Bb5 *`;
+
+type Shape = { san: string; fen: string; children: Shape[] };
+const shapeOf = (n: MoveNode): Shape => ({ san: n.san, fen: n.fen, children: n.children.map(shapeOf) });
+
+describe('treeToPgn', () => {
+  test('a linear game from the standard start writes move text with no tags', () => {
+    const root = parsePgnTree('1. e4 e5 2. Nf3');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    expect(treeToPgn(root)).toBe('1. e4 e5 2. Nf3 *');
+  });
+
+  test('a black-to-move start writes SetUp and FEN tags and a numbered black move', () => {
+    const fen = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
+    const root = parsePgnTree(`[FEN "${fen}"]\n[SetUp "1"]\n\n1... e5 2. Nf3 *`);
+    expect(root).not.toBeNull();
+    if (!root) return;
+    const pgn = treeToPgn(root);
+    expect(pgn).toContain('[SetUp "1"]');
+    expect(pgn).toContain(`[FEN "${fen}"]`);
+    expect(pgn).toContain('1... e5 2. Nf3 *');
+  });
+
+  test('the VAR_PGN tree round-trips, including nested and sibling variations', () => {
+    const root = parsePgnTree(VAR_PGN);
+    expect(root).not.toBeNull();
+    if (!root) return;
+    const again = parsePgnTree(treeToPgn(root));
+    expect(again).not.toBeNull();
+    if (!again) return;
+    expect(shapeOf(again)).toEqual(shapeOf(root));
+    const afterE5 = again.children[0].children[0];
+    expect(afterE5.parent?.children.map((n) => n.san)).toEqual(['e5', 'c5', 'e6']);
+    expect(afterE5.parent?.children[1].children[0].children.map((n) => n.san)).toEqual(['d6', 'Nc6']);
+  });
+
+  test('an empty root writes *', () => {
+    expect(treeToPgn(createRoot())).toBe('*');
+  });
+
+  test('a variation that starts on a black move is numbered with an ellipsis', () => {
+    const root = parsePgnTree('1. e4 e5 (1... c5 2. Nf3) 2. Nf3');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    expect(treeToPgn(root)).toContain('(1... c5 2. Nf3)');
+  });
+});
+
+describe('subtreePgn', () => {
+  test('starts at the node FEN and contains only the continuation and its variations', () => {
+    const root = parsePgnTree(VAR_PGN);
+    expect(root).not.toBeNull();
+    if (!root) return;
+    const nf3 = root.children[0].children[0].children[0];
+    expect(nf3.san).toBe('Nf3');
+    const pgn = subtreePgn(nf3);
+    expect(pgn).toContain(`[FEN "${nf3.fen}"]`);
+    expect(pgn).toContain('Nc6 (2... d6 3. d4) 3. Bb5');
+    expect(pgn).not.toContain('e4');
+    expect(pgn).not.toContain('c5');
+  });
+
+  test('on a leaf writes the FEN with *', () => {
+    const root = parsePgnTree('1. e4 e5');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    const leaf = root.children[0].children[0];
+    const pgn = subtreePgn(leaf);
+    expect(pgn).toContain(`[FEN "${leaf.fen}"]`);
+    expect(pgn.trim().endsWith('*')).toBe(true);
+    expect(pgn).not.toMatch(/\d\./);
   });
 });

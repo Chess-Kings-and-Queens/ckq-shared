@@ -1,5 +1,5 @@
 import { PgnReader } from '@mliebelt/pgn-reader';
-import { START_FEN } from './chessUtils';
+import { START_FEN, withPgnTags, fenMoveContext } from './chessUtils';
 import { fenFields, fenFromFields } from './fen';
 import { setPieceAt } from './boardEditor';
 
@@ -100,6 +100,53 @@ export function mainLine(root: MoveNode): MoveNode[] {
     line.push(node);
   }
   return line;
+}
+
+// ── PGN writer ─────────────────────────────────────────────────────────────────
+
+/**
+ * The move text of `node`'s subtree in PGN order: the node's main continuation, each
+ * variation in parentheses after the move it is an alternative to, numbered from the
+ * position the subtree starts at. `lineStart` forces a number on the first move
+ * (a black move at a line start reads "5... Nf6").
+ */
+function writeMoves(from: MoveNode, lineStart: boolean): string {
+  const parts: string[] = [];
+  let node: MoveNode | undefined = from.children[0];
+  let needNumber = lineStart;
+  while (node) {
+    const parent = node.parent as MoveNode;
+    const { color, fullMove } = fenMoveContext(parent.fen);
+    const label = color === 'w' ? `${fullMove}.` : needNumber ? `${fullMove}...` : '';
+    parts.push(label ? `${label} ${node.san}` : node.san);
+    needNumber = false;
+    for (const alt of parent.children.slice(1)) {
+      if (alt === node) continue;
+      const altCtx = fenMoveContext(parent.fen);
+      const altLabel = altCtx.color === 'w' ? `${altCtx.fullMove}.` : `${altCtx.fullMove}...`;
+      const rest = writeMoves(alt, false);
+      parts.push(`(${altLabel} ${alt.san}${rest ? ` ${rest}` : ''})`);
+      needNumber = true;
+    }
+    node = node.children[0];
+  }
+  return parts.join(' ');
+}
+
+/**
+ * The one PGN writer for a move tree with variations (liveboard-quiz-both-sides-plan D19).
+ * Tags come from `withPgnTags`: a FEN tag (and SetUp) when the root is not the standard
+ * start, nothing otherwise. Round-trips through `parsePgnTree`. An empty tree writes `*`.
+ */
+export function treeToPgn(root: MoveNode): string {
+  const moveText = writeMoves(root, true);
+  const body = moveText ? `${moveText} *` : '*';
+  return root.fen === START_FEN ? body : withPgnTags(body, { FEN: root.fen });
+}
+
+/** The PGN of the game from `node`'s position onward: `node.fen` as the start, `node.children` as the moves (D17). */
+export function subtreePgn(node: MoveNode): string {
+  return treeToPgn({ ...createRoot(node.fen), children: node.children });
 }
 
 // ── Promotion visual FEN ──────────────────────────────────────────────────────
