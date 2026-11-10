@@ -409,6 +409,7 @@ describe('firstDeviation', () => {
       fenBefore: START_FEN,
       givenSan: 'e4',
       studentSan: 'd4',
+      side: 'player',
     });
   });
 
@@ -418,6 +419,7 @@ describe('firstDeviation', () => {
       fenBefore: FEN_AFTER_E4,
       givenSan: 'e5',
       studentSan: 'c5',
+      side: 'player',
     });
   });
 
@@ -427,6 +429,7 @@ describe('firstDeviation', () => {
       fenBefore: FEN_AFTER_E4_E5,
       givenSan: 'Nf3',
       studentSan: 'Nc3',
+      side: 'player',
     });
   });
 
@@ -480,5 +483,69 @@ describe('firstDeviation', () => {
       const deviation = firstDeviation(THREE_PLY_PGN, sans);
       expect(deviation !== null).toBe(graded.result === MoveResult.Incorrect && onPlayerPly);
     });
+  });
+});
+
+// ─── bothSides option (homework-puzzle-type-opponent-moves-plan D6, D15) ─────
+
+describe('bothSides', () => {
+  const PGN = '1. e4 e5 2. Nf3';
+  const both = { bothSides: true };
+
+  test('scorePerMove spreads over all plies', () => {
+    expect(new QuizEvaluator(PGN, 100, both).scorePerMove).toBeCloseTo(100 / 3);
+    expect(new QuizEvaluator(PGN, 100).scorePerMove).toBe(50);
+  });
+
+  test('playerColor is still the first mover', () => {
+    expect(new QuizEvaluator(PGN, 100, both).playerColor).toBe('w');
+  });
+
+  test('a correct prefix is Pending with no nextSan (nothing is auto-played)', () => {
+    const q = new QuizEvaluator(PGN, 100, both);
+    const res = q.evaluate(['e4']);
+    expect(res.result).toBe(MoveResult.Pending);
+    expect(res.nextSan).toBeUndefined();
+    expect(new QuizEvaluator(PGN, 100).evaluate(['e4']).nextSan).toBe('e5');
+  });
+
+  test('the full line is Correct 100', () => {
+    const res = new QuizEvaluator(PGN, 100, both).evaluate(['e4', 'e5', 'Nf3']);
+    expect(res.result).toBe(MoveResult.Correct);
+    expect(res.score).toBe(100);
+  });
+
+  test('a wrong opponent-side ply is Incorrect with credit for the plies before it', () => {
+    const res = new QuizEvaluator(PGN, 100, both).evaluate(['e4', 'd5']);
+    expect(res.result).toBe(MoveResult.Incorrect);
+    expect(res.correctPlayerMoves).toBe(1);
+    expect(res.score).toBeCloseTo(33.3, 1);
+  });
+
+  test('gradePositionAttempt with bothSides matches the stepping evaluator', () => {
+    const q = new QuizEvaluator(PGN, 100, both);
+    for (const sans of [['e4'], ['e4', 'e5'], ['e4', 'd5'], ['d4'], ['e4', 'e5', 'Nf3']]) {
+      const graded = gradePositionAttempt(PGN, sans, both);
+      const stepped = q.evaluate(sans);
+      expect(graded.result).toBe(stepped.result);
+      expect(graded.correctPlayerMoves).toBe(stepped.correctPlayerMoves);
+    }
+    expect(gradePositionAttempt(PGN, ['e4', 'd5'], both).score).toBeCloseTo(33.3, 1);
+  });
+
+  test('firstDeviation reports an opponent-ply miss only under bothSides', () => {
+    expect(firstDeviation(PGN, ['e4', 'd5'], both)).toEqual({
+      ply: 1,
+      fenBefore: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1',
+      givenSan: 'e5',
+      studentSan: 'd5',
+      side: 'opponent',
+    });
+    expect(firstDeviation(PGN, ['e4', 'd5'])).toBeNull();
+  });
+
+  test('firstDeviation on a player ply is side player in both modes', () => {
+    expect(firstDeviation(PGN, ['d4'])?.side).toBe('player');
+    expect(firstDeviation(PGN, ['d4'], both)?.side).toBe('player');
   });
 });

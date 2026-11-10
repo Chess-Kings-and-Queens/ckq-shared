@@ -2,6 +2,10 @@ import * as shared from '../index';
 
 /** Every runtime export this release added; a missing re-export in the barrel fails here. */
 const NEW_RUNTIME_EXPORTS = [
+  // puzzleLines.ts / types/homework.ts
+  'expandOpponentVariations',
+  'puzzleLineProgress',
+  'PUZZLE_TYPES',
   // types/liveboard.ts
   'QUIZ_VERDICTS',
   'QUIZ_MOVE_RESULT_STATUSES',

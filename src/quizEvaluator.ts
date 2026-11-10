@@ -20,6 +20,11 @@ export type EvaluateMoveResult = {
   correctPlayerMoves: number;
 };
 
+export interface QuizEvaluatorOptions {
+  /** Every ply is the student's: no opponent reply is auto-played, every ply earns credit and any ply can deviate (puzzleType 'withOpponentMoves', D6). */
+  bothSides?: boolean;
+}
+
 export class QuizEvaluator {
   readonly quizMoves: QuizMove[];
   readonly maxScore: number;
@@ -27,9 +32,10 @@ export class QuizEvaluator {
   readonly scorePerMove: number;
   /** The position the quiz starts from (the PGN's [FEN] tag, else the start position). */
   readonly startFen: string;
+  readonly bothSides: boolean;
 
   /** Throws `Error('Invalid quiz PGN')` when the PGN cannot be parsed; empty move text does not throw. */
-  constructor(quizPgn: string, maxScore: number) {
+  constructor(quizPgn: string, maxScore: number, options: QuizEvaluatorOptions = {}) {
     const root = parsePgnTree(quizPgn);
     if (!root) throw new Error('Invalid quiz PGN');
     const line = mainLine(root);
@@ -37,8 +43,13 @@ export class QuizEvaluator {
     this.quizMoves = line.map((n) => ({ san: n.san, fen: n.fen, turn: n.color }));
     this.playerColor = line[0]?.color ?? 'w';
     this.maxScore = maxScore;
-    const noOfPlayerMoves = this.quizMoves.filter((m) => m.turn === this.playerColor).length;
+    this.bothSides = options.bothSides === true;
+    const noOfPlayerMoves = this.quizMoves.filter((m) => this.isPlayerPly(m.turn)).length;
     this.scorePerMove = noOfPlayerMoves > 0 ? maxScore / noOfPlayerMoves : 0;
+  }
+
+  isPlayerPly(turn: 'w' | 'b'): boolean {
+    return this.bothSides || turn === this.playerColor;
   }
 
   /** The solution with move numbers, e.g. "13... Qg1+ 14. Kh4 Qh2+" ('' when there are no moves). */
@@ -56,13 +67,13 @@ export class QuizEvaluator {
     const allCorrect = sans.every((san, i) => {
       const expected = this.quizMoves[i];
       const match = expected !== undefined && san === expected.san;
-      if (match && expected.turn === this.playerColor) correctPlayerMoves++;
+      if (match && this.isPlayerPly(expected.turn)) correctPlayerMoves++;
       return match;
     });
     if (!allCorrect) return { result: MoveResult.Incorrect, score: this.scorePerMove * correctPlayerMoves, correctPlayerMoves };
     if (sans.length >= this.quizMoves.length) return { result: MoveResult.Correct, score: this.maxScore, correctPlayerMoves };
     const next = this.quizMoves[sans.length];
-    return { result: MoveResult.Pending, nextSan: next.turn !== this.playerColor ? next.san : undefined, score: 0, correctPlayerMoves };
+    return { result: MoveResult.Pending, nextSan: this.isPlayerPly(next.turn) ? undefined : next.san, score: 0, correctPlayerMoves };
   }
 }
 
@@ -90,8 +101,8 @@ export type PositionGrade = {
  *
  * Moves after the end of the solution line are ignored.
  */
-export function gradePositionAttempt(pgn: string, sans: string[]): PositionGrade {
-  const evaluator = new QuizEvaluator(pgn, 100);
+export function gradePositionAttempt(pgn: string, sans: string[], options: QuizEvaluatorOptions = {}): PositionGrade {
+  const evaluator = new QuizEvaluator(pgn, 100, options);
   const evaluated = evaluator.evaluate(sans.slice(0, evaluator.quizMoves.length));
   const correctPlayerMoves = evaluated.correctPlayerMoves;
   if (evaluated.result === MoveResult.Correct) return { isCorrect: true, score: 100, result: evaluated.result, correctPlayerMoves };
@@ -108,26 +119,29 @@ export type PlyDeviation = {
   givenSan: string;
   /** The student's SAN at that ply. */
   studentSan: string;
+  /** Whose move it was in the puzzle: the student's own side, or the opponent's (only possible under bothSides; D15). */
+  side: 'player' | 'opponent';
 };
 
 /**
  * The first student move that differs from the solution, for the engine judge (homework D3).
  * Null when the moves match the solution as far as they go, when there are no moves, or when the
- * first mismatch falls on an opponent ply (a real client auto-plays those from the solution).
+ * first mismatch falls on an opponent ply in a one-sided puzzle (a real client auto-plays those).
  * Throws `Error('Invalid quiz PGN')` like `QuizEvaluator`.
  */
-export function firstDeviation(pgn: string, sans: readonly string[]): PlyDeviation | null {
-  const evaluator = new QuizEvaluator(pgn, 100);
+export function firstDeviation(pgn: string, sans: readonly string[], options: QuizEvaluatorOptions = {}): PlyDeviation | null {
+  const evaluator = new QuizEvaluator(pgn, 100, options);
   const limit = Math.min(sans.length, evaluator.quizMoves.length);
   for (let i = 0; i < limit; i++) {
     const expected = evaluator.quizMoves[i];
     if (sans[i] === expected.san) continue;
-    if (expected.turn !== evaluator.playerColor) return null;
+    if (!evaluator.isPlayerPly(expected.turn)) return null;
     return {
       ply: i,
       fenBefore: i === 0 ? evaluator.startFen : evaluator.quizMoves[i - 1].fen,
       givenSan: expected.san,
       studentSan: sans[i],
+      side: expected.turn === evaluator.playerColor ? 'player' : 'opponent',
     };
   }
   return null;

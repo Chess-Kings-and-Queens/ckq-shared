@@ -457,6 +457,58 @@ describe('item 5 — player move: neither resolved nor opponentSan present (unre
   });
 });
 
+describe('item 5 — pending with no opponent reply (both-sides, correctSoFar)', () => {
+  test('correctSoFar keeps playing, appends the san and schedules only the brief clear', () => {
+    const { state: next, effects } = reducePuzzleAttempt(playingState({ moves: ['e4'] }), {
+      type: 'PLAYER_MOVE',
+      san: 'e5',
+      result: 'pending',
+      correctSoFar: true,
+    });
+    expect(next.phase).toBe('playing');
+    expect(next.moves).toEqual(['e4', 'e5']);
+    expect(effects).toEqual([{ type: 'SCHEDULE', kind: 'clear-brief', delayMs: BRIEF_CORRECT_OVERLAY_MS }]);
+  });
+
+  test('without the flag it stays a no-op with the san appended', () => {
+    const { state: next, effects } = reducePuzzleAttempt(playingState({ moves: ['e4'] }), {
+      type: 'PLAYER_MOVE',
+      san: 'e5',
+      result: 'pending',
+    });
+    expect(next.phase).toBe('playing');
+    expect(next.moves).toEqual(['e4', 'e5']);
+    expect(effects).toEqual([]);
+  });
+
+  test('correctSoFar with an opponentSan keeps the regular item-4 path', () => {
+    const { state: next, effects } = reducePuzzleAttempt(playingState({ moves: ['e4'] }), {
+      type: 'PLAYER_MOVE',
+      san: 'e5',
+      result: 'pending',
+      opponentSan: 'Nf3',
+      correctSoFar: true,
+    });
+    expect(next.phase).toBe('brief-correct');
+    expect(effects).toEqual([
+      { type: 'SCHEDULE', kind: 'clear-brief', delayMs: BRIEF_CORRECT_OVERLAY_MS },
+      { type: 'SCHEDULE', kind: 'opponent-reply', delayMs: 400, opponentSan: 'Nf3' },
+    ]);
+  });
+
+  test('is ignored from a resolved phase', () => {
+    const state = playingState({ phase: 'resolved-correct' });
+    const { state: next, effects } = reducePuzzleAttempt(state, {
+      type: 'PLAYER_MOVE',
+      san: 'e5',
+      result: 'pending',
+      correctSoFar: true,
+    });
+    expect(next).toEqual(state);
+    expect(effects).toEqual([]);
+  });
+});
+
 describe('player move guard — defensive no-op once already resolved', () => {
   test('a PLAYER_MOVE arriving after resolved-correct is ignored entirely (board should be disabled by then)', () => {
     const state = playingState({ phase: 'resolved-correct' });

@@ -11,6 +11,7 @@ export * from './fen';
 export * from './homeworkUtils';
 export * from './decodeJwt';
 export * from './moveTree';
+export * from './puzzleLines';
 export * from './boardEditor';
 export * from './gameOutcome';
 export * from './uciInfoParser';

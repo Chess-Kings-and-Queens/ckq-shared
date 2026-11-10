@@ -15,6 +15,13 @@ import type { HomeworkJudgeOutcome } from '../engineJudge';
 
 export type HomeworkStatus = "not_started" | "in_progress" | "completed";
 
+/** The kind of puzzle a collection's homework is (homework-puzzle-type-opponent-moves-plan D5). */
+export const PUZZLE_TYPES = ['regular', 'withOpponentMoves'] as const;
+export type PuzzleType = (typeof PUZZLE_TYPES)[number];
+
+/** One entry of GET /homework/:id/puzzle `lines`, parallel to `games` (D8, D14): the 0-based PGN game the line came from, and, for a variation line, the opponent move the position starts after ("5... Nf6"); null for a main line (D2). */
+export interface HomeworkPuzzleLine { game: number; branchMove: string | null }
+
 export type HomeworkPositionStatus = "correct" | "incorrect" | "not_attempted";
 
 /** One entry of GET /homework/report `positions`, keyed "0".."noOfGames-1" (homeworkUtils.js buildPositionReport). */
@@ -76,6 +83,10 @@ export interface HomeworkPuzzlePayload extends HomeworkStrikeStatus {
   homeworkMaterialId: string;
   /** The engine judge applies to this homework: the global switch AND the collection's flag (homework engine judge D1, D12). */
   engineJudge: boolean;
+  /** The collection's puzzle type (D5). `withOpponentMoves`: the student plays both sides and `games` holds one standalone line per opponent variation (D1). */
+  puzzleType: PuzzleType;
+  /** One entry per `games` entry (D8). */
+  lines: HomeworkPuzzleLine[];
 }
 
 /** GET /homework/:id/lesson (homework.service.js getLessonContent). pgnContent and videoUrl may be "" for a video-only or PGN-only lesson. */
