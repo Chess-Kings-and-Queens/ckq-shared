@@ -123,7 +123,7 @@ export function moveFlagged(remainingMs: number, elapsedMs: number, compMs: numb
   return moveTimeMs >= finiteOr(remainingMs, 0);
 }
 
-/** Lichess: the clock starts once each side has moved (scalachess `Game.applyClock`, `c.start` at the second ply). */
+/** Lichess: the clock starts once each side has moved (scalachess Game.applyClock, c.start at the second ply). Byes, class missions and curriculum missions; PvP tournament games run from creation (firstMoveClockFloorMs). */
 export const CLOCK_START_PLIES = 2;
 
 /** True once `pliesPlayed` moves have been played and the clock runs (`CLOCK_START_PLIES`). */
@@ -132,14 +132,15 @@ export function clockStarted(pliesPlayed: number): boolean {
 }
 
 /**
- * Lichess first-move expiration for a tournament game (lila `Game.timeForFirstMove`,
- * tournament branch; speed by scalachess `Speed.byTime(estimateTotalSeconds)`):
- * the milliseconds a side has to make its first move before it loses by no-start.
+ * CKQ rule (ADR backend-039, deviation 2; owner 2026-11-10): a tournament side that has
+ * not made its first move by the time its clock reaches this fraction of the time control
+ * loses by no-start. The clock runs from game creation (not Lichess's second-ply start).
  */
-export function timeForFirstMoveMs(limitMs: number, incrementMs: number): number {
-  const total = estimateTotalSeconds(limitMs, incrementMs);
-  const seconds = total <= 29 ? 11 : total <= 179 ? 16 : total <= 479 ? 21 : total <= 1499 ? 25 : 30;
-  return seconds * 1000;
+export const FIRST_MOVE_CLOCK_FLOOR = 0.5;
+
+/** The clock value (ms) at which a side still on its first move forfeits: `limitMs × FIRST_MOVE_CLOCK_FLOOR`, floored to a whole ms. */
+export function firstMoveClockFloorMs(limitMs: number): number {
+  return Math.floor(Math.max(0, finiteOr(limitMs, 0)) * FIRST_MOVE_CLOCK_FLOOR);
 }
 
 /**

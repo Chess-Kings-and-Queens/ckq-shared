@@ -4,13 +4,14 @@ import {
   chargeMove,
   clockStarted,
   compensate,
+  FIRST_MOVE_CLOCK_FLOOR,
+  firstMoveClockFloorMs,
   flaggedAt,
   graceMs,
   initialLagQuota,
   moveFlagged,
   reportedLagMs,
   settleRemainingMs,
-  timeForFirstMoveMs,
   withTrustedLag,
 } from '../lagComp';
 
@@ -253,15 +254,20 @@ describe('clockStarted', () => {
   });
 });
 
-describe('timeForFirstMoveMs (Lichess tournament first-move expiration)', () => {
+describe('firstMoveClockFloorMs (half the time control)', () => {
+  test('FIRST_MOVE_CLOCK_FLOOR is 0.5', () => {
+    expect(FIRST_MOVE_CLOCK_FLOOR).toBe(0.5);
+  });
+
   test.each([
-    [15 * SEC, 0, 11_000],
-    [60 * SEC, 0, 16_000],
-    [180 * SEC, 0, 21_000], // 180 s is the Blitz boundary
-    [3 * 60 * SEC, 2 * SEC, 21_000], // 3+2 -> total 260 s
-    [10 * 60 * SEC, 0, 25_000],
-    [25 * 60 * SEC, 0, 30_000],
-  ])('limit %i ms + increment %i ms -> %i ms', (limitMs, incrementMs, expected) => {
-    expect(timeForFirstMoveMs(limitMs, incrementMs)).toBe(expected);
+    [60 * SEC, 30_000],
+    [180 * SEC, 90_000],
+    [600 * SEC, 300_000],
+    [1 * SEC, 500],
+    [0, 0],
+    [NaN, 0],
+    [-5000, 0],
+  ])('limit %i ms -> floor %i ms', (limitMs, expected) => {
+    expect(firstMoveClockFloorMs(limitMs)).toBe(expected);
   });
 });
