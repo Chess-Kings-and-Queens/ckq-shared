@@ -15,12 +15,32 @@ import type { HomeworkJudgeOutcome } from '../engineJudge';
 
 export type HomeworkStatus = "not_started" | "in_progress" | "completed";
 
-/** The kind of puzzle a collection's homework is (homework-puzzle-type-opponent-moves-plan D5). */
-export const PUZZLE_TYPES = ['regular', 'withOpponentMoves'] as const;
+/** The kind of puzzle a collection's homework (or a liveboard quiz round) is. `regular`: the student plays their side, replies auto-played. `withOpponentMoves`: the student plays both colours of the main line; variations are not asked. `withVariations`: the student plays their side through the main line and then each opponent variation as its own position, replies auto-played (homework-puzzle-type-split-plan D1–D4). */
+export const PUZZLE_TYPES = ['regular', 'withOpponentMoves', 'withVariations'] as const;
 export type PuzzleType = (typeof PUZZLE_TYPES)[number];
 
-/** One entry of GET /homework/:id/puzzle `lines`, parallel to `games` (D8, D14): the 0-based PGN game the line came from, and, for a variation line, the opponent move the position starts after ("5... Nf6"); null for a main line (D2). */
-export interface HomeworkPuzzleLine { game: number; branchMove: string | null }
+/** What a puzzle type means, in the two flags every consumer acts on (homework-puzzle-type-split-plan D2). */
+export interface PuzzleTypeRules {
+  /** Every ply is the student's: both colours movable and graded, nothing auto-played. */
+  bothSides: boolean;
+  /** Each opponent-ply variation of a game is its own position (`expandOpponentVariations`). */
+  expandVariations: boolean;
+}
+
+/** The one table of what each type means. `regular` is the row an unknown value falls back to. */
+export const PUZZLE_TYPE_RULES: Readonly<Record<PuzzleType, Readonly<PuzzleTypeRules>>> = Object.freeze({
+  regular: Object.freeze({ bothSides: false, expandVariations: false }),
+  withOpponentMoves: Object.freeze({ bothSides: true, expandVariations: false }),
+  withVariations: Object.freeze({ bothSides: false, expandVariations: true }),
+});
+
+/** The rules for a type; an unknown or missing value reads as `regular` (the fallback `puzzleTypeOf` and the liveboard hook already use). */
+export function puzzleTypeRules(type: string | null | undefined): Readonly<PuzzleTypeRules> {
+  return (PUZZLE_TYPE_RULES as Record<string, Readonly<PuzzleTypeRules>>)[type ?? ''] ?? PUZZLE_TYPE_RULES.regular;
+}
+
+/** One entry of GET /homework/:id/puzzle `lines`, parallel to `games` (D8, D14 of the prior plan; D5 here): the 0-based PGN game the line came from; for a variation line the opponent's alternative move as a numbered label (`"5... Nf6"`), the FEN it was played from and its bare SAN (`"Nf6"`), so the client can replay it before the student's first move; all three null for a main line. */
+export interface HomeworkPuzzleLine { game: number; branchMove: string | null; branchFen: string | null; branchSan: string | null }
 
 export type HomeworkPositionStatus = "correct" | "incorrect" | "not_attempted";
 
@@ -83,7 +103,7 @@ export interface HomeworkPuzzlePayload extends HomeworkStrikeStatus {
   homeworkMaterialId: string;
   /** The engine judge applies to this homework: the global switch AND the collection's flag (homework engine judge D1, D12). */
   engineJudge: boolean;
-  /** The collection's puzzle type (D5). `withOpponentMoves`: the student plays both sides and `games` holds one standalone line per opponent variation (D1). */
+  /** The collection's puzzle type (D5). `withOpponentMoves`: the student plays both sides of the main line; `withVariations`: `games` holds one standalone line per opponent variation (D1–D4). */
   puzzleType: PuzzleType;
   /** One entry per `games` entry (D8). */
   lines: HomeworkPuzzleLine[];
