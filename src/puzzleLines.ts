@@ -8,6 +8,10 @@ export interface PuzzleLine {
   pgn: string;
   /** The opponent's alternative move the line starts after, with its number ("5... Nf6"); null for the main line. */
   branchMove: string | null;
+  /** The position the opponent's alternative was played from; null for the main line. */
+  branchFen: string | null;
+  /** The alternative's bare SAN, for the client's branch-move replay (homework-puzzle-type-split-plan D5/D6); null for the main line. */
+  branchSan: string | null;
 }
 
 /**
@@ -16,27 +20,35 @@ export interface PuzzleLine {
  * ties in PGN order. A solver-ply variation (an alternative solution) is not a line and is not
  * walked. A variation with no move after the alternative is skipped. An unparsable game is one
  * position, as it is today.
+ * Each variation line ends on the **solver's** last ply: a trailing opponent reply is dropped, and a
+ * variation with no solver ply after the alternative is skipped (D4 — a regular-graded line that ends
+ * on an opponent ply never resolves on the client).
  */
 export function expandOpponentVariations(gamePgn: string): PuzzleLine[] {
   const root = parsePgnTree(gamePgn);
-  if (!root) return [{ pgn: gamePgn, branchMove: null }];
+  if (!root) return [{ pgn: gamePgn, branchMove: null, branchFen: null, branchSan: null }];
   const solver = root.children[0]?.color ?? 'w';
   const lines: Array<PuzzleLine & { depth: number }> = [];
 
   const visit = (node: MoveNode): void => {
     for (const alt of node.children.slice(1)) {
       if (alt.color === solver) continue;
-      const sans: string[] = [];
+      const nodes: MoveNode[] = [];
       let n: MoveNode | undefined = alt.children[0];
       while (n) {
-        sans.push(n.san);
+        nodes.push(n);
         n = n.children[0];
       }
-      if (sans.length > 0) {
+      let end = nodes.length;
+      while (end > 0 && nodes[end - 1].color !== solver) end--;
+      const kept = nodes.slice(0, end);
+      if (kept.length > 0) {
         const ctx = fenMoveContext(node.fen);
         lines.push({
-          pgn: buildQuizPgn(alt.fen, sans),
+          pgn: buildQuizPgn(alt.fen, kept.map((k) => k.san)),
           branchMove: formatMoveSequence([alt.san], ctx.color, ctx.fullMove),
+          branchFen: node.fen,
+          branchSan: alt.san,
           depth: alt.depth,
         });
       }
@@ -47,7 +59,10 @@ export function expandOpponentVariations(gamePgn: string): PuzzleLine[] {
 
   visit(root);
   lines.sort((a, b) => b.depth - a.depth);
-  return [{ pgn: gamePgn, branchMove: null }, ...lines.map(({ pgn, branchMove }) => ({ pgn, branchMove }))];
+  return [
+    { pgn: gamePgn, branchMove: null, branchFen: null, branchSan: null },
+    ...lines.map(({ pgn, branchMove, branchFen, branchSan }) => ({ pgn, branchMove, branchFen, branchSan })),
+  ];
 }
 
 /** Where a position sits in a both-sides puzzle (D16), 1-based: the game it came from among the homework's games, and the line among that game's lines. */
@@ -69,3 +84,8 @@ export function puzzleLineProgress(lines: readonly HomeworkPuzzleLine[], index: 
     lineCount: inGame.length,
   };
 }
+
+/** Branch-move replay (homework-puzzle-type-split-plan D6/D8): how long the branch position is shown before the opponent's alternative is played. */
+export const BRANCH_INTRO_HOLD_MS = 600;
+/** …and how long after that move lands before the student may move (covers the board's 200 ms move animation). */
+export const BRANCH_INTRO_SETTLE_MS = 500;

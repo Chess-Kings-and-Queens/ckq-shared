@@ -6,6 +6,10 @@ const NEW_RUNTIME_EXPORTS = [
   'expandOpponentVariations',
   'puzzleLineProgress',
   'PUZZLE_TYPES',
+  'PUZZLE_TYPE_RULES',
+  'puzzleTypeRules',
+  'BRANCH_INTRO_HOLD_MS',
+  'BRANCH_INTRO_SETTLE_MS',
   // moveTree.ts
   'treeToPgn',
   'subtreePgn',
