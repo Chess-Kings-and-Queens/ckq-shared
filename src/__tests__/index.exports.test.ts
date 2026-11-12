@@ -81,6 +81,9 @@ const NEW_RUNTIME_EXPORTS = [
   'firstDeviation',
   // puzzleAttemptReducer.ts
   'JUDGED_ADVANCE_MS',
+  // noticeBody.ts
+  'parseNoticeBody',
+  'parseNoticeInline',
 ] as const;
 
 describe('package root exports (v0.36.0)', () => {
