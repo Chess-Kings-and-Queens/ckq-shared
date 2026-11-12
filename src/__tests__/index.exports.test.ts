@@ -84,6 +84,15 @@ const NEW_RUNTIME_EXPORTS = [
   // noticeBody.ts
   'parseNoticeBody',
   'parseNoticeInline',
+  // workLogDisplay.ts
+  'formatHoursMinutes',
+  'WORK_LOG_STATUS_HEADLINES',
+  'WORK_LOG_QUICK_HOURS',
+  'WORK_LOG_ACTIVITY_COLORS',
+  'WORK_LOG_OTHER_COLOR',
+  'WORK_LOG_SYNCED_COLOR',
+  'workLogActivityColor',
+  'formatUpdatedAgo',
 ] as const;
 
 describe('package root exports (v0.36.0)', () => {

@@ -16,6 +16,12 @@ export interface WorkLogPlatformGames {
   losses: number;
 }
 
+/** One Work Log tool from the backend catalog (`backend-2.0` `src/config/workLogTools.js`). Clients render `label` and never branch on `key` (ADR frontend-010 §3). */
+export interface WorkLogTool {
+  key: string;
+  label: string;
+}
+
 /** Response of POST /work-log/sync/:source (synced-practice-by-day D9). */
 export interface WorkLogSyncResult {
   source: WorkLogPlatform;
@@ -56,6 +62,8 @@ export interface WorkLogActivityProgress {
   hoursPerWeek: number;
   loggedHours: number;
   met: boolean;
+  /** Tool keys the backend suggests for this activity (from its medium); [] when none. */
+  suggestedTools: string[];
 }
 
 export interface WorkLogDay {
@@ -90,6 +98,8 @@ export interface WorkLogAggregate {
   activities: WorkLogActivityProgress[];
   focusActivityId: string | null;
   days: WorkLogDay[];
+  /** The tool catalog, in display order. */
+  tools: WorkLogTool[];
 }
 
 export interface WeeklyHistoryItem {
