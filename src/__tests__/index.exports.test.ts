@@ -93,6 +93,8 @@ const NEW_RUNTIME_EXPORTS = [
   'WORK_LOG_SYNCED_COLOR',
   'workLogActivityColor',
   'formatUpdatedAgo',
+  // countdown.ts
+  'countdownParts',
 ] as const;
 
 describe('package root exports (v0.36.0)', () => {
