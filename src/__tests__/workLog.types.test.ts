@@ -19,11 +19,42 @@ describe('workLog types', () => {
       expectedHours: 3,
       hoursShort: 3.8,
       status: 'on_pace',
-      activities: [{ activityId: 'a1', label: 'Tactics', hoursPerWeek: 4, loggedHours: 2, met: false }],
+      activities: [
+        { activityId: 'a1', label: 'Tactics', hoursPerWeek: 4, loggedHours: 2, met: false, suggestedTools: ['lichess'] },
+      ],
       focusActivityId: 'a1',
       days: [{ date: '2027-03-08', hours: 1, isToday: false, isFuture: false }],
+      tools: [{ key: 'lichess', label: 'Lichess' }],
     };
     expect(aggregate.status).toBe('on_pace');
+    expect(aggregate.activities[0].suggestedTools).toEqual(['lichess']);
+    expect(aggregate.tools[0]).toEqual({ key: 'lichess', label: 'Lichess' });
+  });
+
+  it('WorkLogAggregate requires the tool catalog', () => {
+    // @ts-expect-error missing `tools`
+    const missing: WorkLogAggregate = {
+      totalHours: 0,
+      perActivity: {},
+      streak: 0,
+      weekStart: '2027-03-08T05:00:00.000Z',
+      weekEnd: '2027-03-15T03:59:59.999Z',
+      platformGames: {},
+      weekRange: 'Mar 8 – Mar 14, 2027',
+      isCurrentWeek: true,
+      selfHours: 0,
+      syncedHours: 0,
+      unplannedHours: 0,
+      entryCounts: { self: 0, auto: 0 },
+      targetHours: null,
+      expectedHours: null,
+      hoursShort: null,
+      status: 'no_target',
+      activities: [],
+      focusActivityId: null,
+      days: [],
+    };
+    expect(missing.status).toBe('no_target');
   });
 
   it('WeeklyHistoryItem carries target and met flag, both nullable', () => {

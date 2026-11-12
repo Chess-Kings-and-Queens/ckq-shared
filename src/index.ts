@@ -29,6 +29,7 @@ export * from './types/workbook';
 
 export * from './tokens';
 export * from './statusDisplay';
+export * from './workLogDisplay';
 export * from './apiErrors';
 export * from './tournamentResultLabels';
 export * from './tablebase';
@@ -36,6 +37,7 @@ export * from './boardAppearance';
 
 export * from './types/student';
 export * from './types/workLog';
+export * from './types/playerHistory';
 export * from './types/lessonPlan';
 export * from './types/studentGames';
 export * from './types/tournamentResults';
