@@ -26,6 +26,7 @@ export * from './puzzleAttemptReducer';
 export * from './types/homework';
 export * from './types/missions';
 export * from './types/workbook';
+export * from './types/curriculum';
 
 export * from './tokens';
 export * from './statusDisplay';
