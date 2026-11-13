@@ -24,6 +24,7 @@ describe('tokens', () => {
     expect(tokens.radius).toEqual({
       '3xs': 2,
       '2xs': 4,
+      xs: 6,
       sm: 8,
       md: 10,
       lg: 12,
@@ -51,6 +52,7 @@ describe('tokens', () => {
     expect(tokens.fontSize['7xl']).toBe(48);
     expect(tokens.fontSize.glyph).toBe(80);
     expect(tokens.fontSize.glyphLg).toBe(144);
+    expect(tokens.fontSize.watermark).toBe(256);
   });
 
   it('lineHeight, letterSpacing and duration are present with numeric values', () => {
