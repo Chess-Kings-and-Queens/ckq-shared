@@ -1,4 +1,4 @@
-import { scoreColor, formatTime } from '../homeworkUtils';
+import { scoreColor, scoreTone, formatTime } from '../homeworkUtils';
 
 describe('scoreColor', () => {
   test('returns green for scores >= 80', () => {
@@ -25,6 +25,23 @@ describe('scoreColor', () => {
     expect(scoreColor(79.99)).toBe('#f57f17');
     expect(scoreColor(50)).toBe('#f57f17');
     expect(scoreColor(49.99)).toBe('#c62828');
+  });
+});
+
+describe('scoreTone', () => {
+  test('success for scores >= 80', () => {
+    expect(scoreTone(100)).toBe('success');
+    expect(scoreTone(80)).toBe('success');
+  });
+
+  test('warning for scores >= 50 and < 80', () => {
+    expect(scoreTone(79)).toBe('warning');
+    expect(scoreTone(50)).toBe('warning');
+  });
+
+  test('danger for scores below 50', () => {
+    expect(scoreTone(49)).toBe('danger');
+    expect(scoreTone(0)).toBe('danger');
   });
 });
 
