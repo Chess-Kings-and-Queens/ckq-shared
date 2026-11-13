@@ -42,6 +42,7 @@ export const tokens = {
   radius: {
     '3xs': 2,
     '2xs': 4,
+    xs: 6,
     sm: 8,
     md: 10,
     lg: 12,
@@ -71,6 +72,7 @@ export const tokens = {
     '7xl': 48,
     glyph: 80,
     glyphLg: 144,
+    watermark: 256,
     statSm: 18,
     statBase: 20,
     statMd: 22,
