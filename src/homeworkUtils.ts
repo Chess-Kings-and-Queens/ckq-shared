@@ -1,7 +1,15 @@
+export type ScoreTone = 'success' | 'warning' | 'danger';
+
+export function scoreTone(pct: number): ScoreTone {
+  if (pct >= 80) return 'success';
+  if (pct >= 50) return 'warning';
+  return 'danger';
+}
+
+const SCORE_HEX: Record<ScoreTone, string> = { success: '#2e7d32', warning: '#f57f17', danger: '#c62828' };
+
 export function scoreColor(pct: number): string {
-  if (pct >= 80) return "#2e7d32";
-  if (pct >= 50) return "#f57f17";
-  return "#c62828";
+  return SCORE_HEX[scoreTone(pct)];
 }
 
 export function formatTime(seconds: number | null): string {

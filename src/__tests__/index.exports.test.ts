@@ -95,6 +95,8 @@ const NEW_RUNTIME_EXPORTS = [
   'formatUpdatedAgo',
   // countdown.ts
   'countdownParts',
+  // homeworkUtils.ts
+  'scoreTone',
 ] as const;
 
 describe('package root exports (v0.36.0)', () => {
