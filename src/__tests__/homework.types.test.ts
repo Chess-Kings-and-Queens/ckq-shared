@@ -1,5 +1,5 @@
 import { HOMEWORK_CONFLICT_CODES, homeworkConflictCode, PUZZLE_TYPES, PUZZLE_TYPE_RULES, puzzleTypeRules } from '../types/homework';
-import type { CreateHomeworkResultInput, HomeworkPuzzleLine, HomeworkPuzzlePayload, PositionSubmissionOutcome } from '../types/homework';
+import type { CreateHomeworkResultInput, HomeworkPuzzleLine, HomeworkPuzzlePayload, HomeworkRow, PositionSubmissionOutcome } from '../types/homework';
 import type { SubmitWorkbookMoveInput } from '../types/workbook';
 
 describe('homeworkConflictCode', () => {
@@ -91,5 +91,30 @@ describe('puzzle type contract', () => {
     // @ts-expect-error puzzleType and lines are required
     const bad: HomeworkPuzzlePayload = { ...base };
     expect(bad.games).toHaveLength(2);
+  });
+});
+
+describe('HomeworkRow', () => {
+  const row = {
+    _id: 'hw-1',
+    coachName: '',
+    noOfGames: 3,
+    noOfAnswers: 0,
+    completionPercentage: 0,
+    scorePct: 0,
+    timeSpent: 0,
+    status: 'not_started' as const,
+    createdAt: '2026-11-13T12:00:00Z',
+    isNext: false,
+  };
+  test('a specialized row with no class compiles and reads back', () => {
+    const hw: HomeworkRow = { ...row, isSpecialized: true };
+    expect(hw.isSpecialized).toBe(true);
+    expect(hw.groupClassName).toBeUndefined();
+  });
+  test('a row without isSpecialized is rejected by the compiler', () => {
+    // @ts-expect-error isSpecialized is required
+    const bad: HomeworkRow = { ...row };
+    expect(bad._id).toBe('hw-1');
   });
 });
