@@ -217,6 +217,8 @@ export interface HomeworkRow {
   materialCollectionTitle?: string;
   coachName: string;
   groupClassName?: string;
+  /** Assigned as a specialized lesson (no class): Homework.isSpecialized, sent by getProgress. Never infer it from a missing groupClassName. */
+  isSpecialized: boolean;
   noOfGames: number;
   noOfAnswers: number;
   completionPercentage: number;
