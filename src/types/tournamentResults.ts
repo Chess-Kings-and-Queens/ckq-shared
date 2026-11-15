@@ -23,7 +23,9 @@ export type TournamentGameResult = "1-0" | "0-1" | "1/2-1/2" | null;
 export type PlayerKind = "student" | "guest" | "engine";
 export type JoinState = "upcoming" | "open" | "in_round" | "between_rounds" | "done";
 export type RoundStatus = "played" | "in_progress" | "upcoming";
-export type ResultsListStatus = "in_progress" | "completed";
+/** Derived by the backend, never stored: `class` for the Liveboard program, else `online`. */
+export type TournamentKind = "online" | "class";
+export type ResultsListStatus = "in_progress" | "completed" | "aborted";
 
 export interface PlayerRef {
   id: string;
@@ -70,6 +72,7 @@ export interface ResultsListRow {
   _id: string;
   name: string;
   format: OnlineTournamentFormat;
+  kind: TournamentKind;
   status: ResultsListStatus;
   levels: OnlineTournamentLevelRef[];
   rounds: number;
@@ -97,6 +100,7 @@ export interface ResultsListParams {
   limit?: number;
   status?: ResultsListStatus | "";
   format?: OnlineTournamentFormat | "";
+  kind?: TournamentKind;
   q?: string;
   studentId?: string;
 }
@@ -123,6 +127,7 @@ export interface ResultsDetail {
   _id: string;
   name: string;
   format: OnlineTournamentFormat;
+  kind: TournamentKind;
   status: OnlineTournamentStatus;
   levels: OnlineTournamentLevelRef[];
   timeControlSeconds: number;
@@ -134,6 +139,8 @@ export interface ResultsDetail {
   nextRoundAt: string | null;
   joinState: JoinState;
   header: ResultsHeader | null;
+  /** The live room this tournament belongs to, or null when it has none. */
+  roomId: string | null;
   counts: { players: number; games: number };
   tiebreakOrder: TiebreakKey[];
   leader: ResultsLeader | null;
