@@ -33,6 +33,7 @@ export * from './statusDisplay';
 export * from './workLogDisplay';
 export * from './apiErrors';
 export * from './tournamentResultLabels';
+export * from './liveboardProgram';
 export * from './tablebase';
 export * from './boardAppearance';
 

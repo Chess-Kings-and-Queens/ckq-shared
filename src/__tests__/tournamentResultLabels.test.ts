@@ -111,6 +111,9 @@ describe("label maps", () => {
     expect(formatLabel("tournament")).toBe("Tournament");
     expect(statusLabel("in_progress")).toBe("In Progress");
     expect(statusLabel("completed")).toBe("Completed");
+    expect(statusLabel("cancelled")).toBe("Cancelled");
+    expect(statusLabel("scheduled")).toBe("Scheduled");
+    expect(statusLabel("aborted")).toBe("Aborted");
     expect(tiebreakLabel("sb")).toBe("Sonneborn-Berger");
     expect(tiebreakLabel("name")).toBe("Name");
   });

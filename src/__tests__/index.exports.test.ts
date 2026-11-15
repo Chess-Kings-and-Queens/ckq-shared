@@ -93,6 +93,9 @@ const NEW_RUNTIME_EXPORTS = [
   'WORK_LOG_SYNCED_COLOR',
   'workLogActivityColor',
   'formatUpdatedAgo',
+  // liveboardProgram.ts
+  'LIVEBOARD_PROGRAM_ID',
+  'isLiveboardProgram',
   // countdown.ts
   'countdownParts',
   // homeworkUtils.ts
