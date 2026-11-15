@@ -6,7 +6,7 @@
 import type { JoinState } from './tournamentResults';
 
 export type OnlineTournamentFormat = 'tournament' | 'league';
-export type OnlineTournamentStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+export type OnlineTournamentStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'aborted';
 
 /**
  * Backend-computed join state (Hard Rule #8 — the dashboard card renders this

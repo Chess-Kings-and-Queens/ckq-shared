@@ -38,7 +38,7 @@ export function formatTimeControl(seconds: number, increment: number): string {
 export const formatLabel = (f: OnlineTournamentFormat): string => (f === 'league' ? 'League' : 'Tournament');
 
 export const statusLabel = (s: OnlineTournamentStatus): string =>
-  ({ scheduled: 'Scheduled', in_progress: 'In Progress', completed: 'Completed', cancelled: 'Cancelled' })[s];
+  ({ scheduled: 'Scheduled', in_progress: 'In Progress', completed: 'Completed', cancelled: 'Cancelled', aborted: 'Aborted' })[s];
 
 export const tiebreakLabel = (k: TiebreakKey): string =>
   ({ points: 'Points', sb: 'Sonneborn-Berger', wins: 'Wins', name: 'Name' })[k];
