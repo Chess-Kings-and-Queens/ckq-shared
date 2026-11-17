@@ -1,4 +1,4 @@
-import { createRoot, buildTreeFromPgn, movePieceInFen, parsePgnTree, mainLine, treeToPgn, subtreePgn, type MoveNode } from '../moveTree';
+import { createRoot, buildTreeFromPgn, movePieceInFen, parsePgnTree, mainLine, treeToPgn, subtreePgn, addVariation, type MoveNode } from '../moveTree';
 import { START_FEN } from '../chessUtils';
 
 describe('createRoot', () => {
@@ -239,6 +239,95 @@ describe('parsePgnTree — node ids (pgn-tree-unique-node-ids-plan.md D1)', () =
   });
 });
 
+describe('parsePgnTree — move annotations', () => {
+  const ANNOTATED =
+    '1. d4 { [%eval 0.15] [%clk 1:30:52] } 1... Nf6 { [%eval #-3] [%clk 0:05:07] good move } 2. c4 { plain } *';
+
+  test('reads eval, clock and text after each move', () => {
+    const root = parsePgnTree(ANNOTATED);
+    expect(root).not.toBeNull();
+    if (!root) return;
+    const [d4, nf6, c4] = mainLine(root);
+    expect(d4.evalCp).toBe(15);
+    expect(d4.clockSec).toBe(5452);
+    expect(d4).not.toHaveProperty('evalMate');
+    expect(d4).not.toHaveProperty('comment');
+    expect(nf6.evalMate).toBe(-3);
+    expect(nf6.clockSec).toBe(307);
+    expect(nf6.comment).toBe('good move');
+    expect(nf6).not.toHaveProperty('evalCp');
+    expect(c4.comment).toBe('plain');
+    expect(c4).not.toHaveProperty('evalCp');
+    expect(c4).not.toHaveProperty('evalMate');
+    expect(c4).not.toHaveProperty('clockSec');
+  });
+
+  test('a move with no comment has none of the four keys', () => {
+    const root = parsePgnTree('1. e4 e5 *');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    for (const node of mainLine(root)) {
+      for (const key of ['comment', 'clockSec', 'evalCp', 'evalMate']) expect(node).not.toHaveProperty(key);
+    }
+  });
+
+  test.each([
+    ['[%eval -6.59]', -659],
+    ['[%eval 0.0]', 0],
+    ['[%eval 0.15,18]', 15],
+  ])('an evaluation %s is %i centipawns', (tag, cp) => {
+    const root = parsePgnTree(`1. e4 { ${tag} } *`);
+    expect(root).not.toBeNull();
+    if (!root) return;
+    expect(root.children[0].evalCp).toBe(cp);
+    expect(root.children[0]).not.toHaveProperty('evalMate');
+  });
+
+  test('the depth form of a mate evaluation gives evalMate', () => {
+    const root = parsePgnTree('1. e4 { [%eval #3,20] } *');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    expect(root.children[0].evalMate).toBe(3);
+    expect(root.children[0]).not.toHaveProperty('evalCp');
+  });
+
+  test('a clock with tenths is whole seconds', () => {
+    const root = parsePgnTree('1. e4 { [%clk 0:00:08.5] } *');
+    expect(root?.children[0].clockSec).toBe(8);
+  });
+
+  test('a malformed clock leaves clockSec unset', () => {
+    const root = parsePgnTree('1. e4 { [%clk 1:75:00] } *');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    expect(root.children[0]).not.toHaveProperty('clockSec');
+  });
+
+  test('a comment inside a variation lands on the variation node', () => {
+    const root = parsePgnTree('1. e4 e5 (1... c5 { [%eval 0.30] sharp } 2. Nf3) 2. Nf3 *');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    const afterE4 = root.children[0];
+    expect(afterE4.children.map((n) => n.san)).toEqual(['e5', 'c5']);
+    expect(afterE4.children[0]).not.toHaveProperty('evalCp');
+    expect(afterE4.children[1].evalCp).toBe(30);
+    expect(afterE4.children[1].comment).toBe('sharp');
+  });
+
+  test('a comment on the very first move is read', () => {
+    const root = parsePgnTree('1. e4 { opening } e5 *');
+    expect(root?.children[0].comment).toBe('opening');
+  });
+
+  test('a comment holding Z0 or -- keeps its text', () => {
+    const root = parsePgnTree('1. e4 { white -- black Z0 } e5 *');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    expect(root.children[0].comment).toBe('white -- black Z0');
+    expect(mainLine(root)).toHaveLength(2);
+  });
+});
+
 describe('mainLine', () => {
   test('an empty root has an empty main line', () => {
     expect(mainLine(createRoot())).toEqual([]);
@@ -302,6 +391,57 @@ describe('treeToPgn', () => {
     if (!root) return;
     expect(treeToPgn(root)).toContain('(1... c5 2. Nf3)');
   });
+
+  test('with no second argument an annotated tree writes no comments', () => {
+    const root = parsePgnTree('1. d4 { [%eval 0.15] [%clk 1:30:52] } 1... Nf6 { [%eval #-3] good move } 2. c4 { plain } *');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    expect(treeToPgn(root)).toBe('1. d4 Nf6 2. c4 *');
+    expect(treeToPgn(root, {})).toBe('1. d4 Nf6 2. c4 *');
+    expect(treeToPgn(root, { comments: false })).toBe('1. d4 Nf6 2. c4 *');
+  });
+
+  test('comments: true writes eval, clock and text, and numbers the black move after a comment', () => {
+    const root = parsePgnTree('1. d4 { [%eval 0.15] [%clk 1:30:52] } 1... Nf6 { [%eval #-3] [%clk 0:05:07] good move } 2. c4 { plain } *');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    expect(treeToPgn(root, { comments: true })).toBe(
+      '1. d4 { [%eval 0.15] [%clk 1:30:52] } 1... Nf6 { [%eval #-3] [%clk 0:05:07] good move } 2. c4 { plain } *',
+    );
+  });
+
+  test("comments: true writes a variation's first-move comment inside the parentheses", () => {
+    const root = parsePgnTree('1. e4 e5 (1... c5 { [%clk 0:01:00] sharp } 2. Nf3) 2. Nf3 *');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    expect(treeToPgn(root, { comments: true })).toBe('1. e4 e5 (1... c5 { [%clk 0:01:00] sharp } 2. Nf3) 2. Nf3 *');
+    expect(treeToPgn(root)).toBe('1. e4 e5 (1... c5 2. Nf3) 2. Nf3 *');
+  });
+
+  test('comments: true strips braces from comment text', () => {
+    const root = parsePgnTree('1. e4 *');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    root.children[0].comment = 'a{b}c';
+    expect(treeToPgn(root, { comments: true })).toBe('1. e4 { abc } *');
+  });
+
+  test('comments: true round-trips through parsePgnTree', () => {
+    const root = parsePgnTree(
+      '1. e4 { [%eval 0.30] [%clk 1:30:00] } e5 { [%eval -0.25] } (1... c5 { [%eval #2] [%clk 0:59:59] sharp } 2. Nf3 { [%clk 0:10:00] }) 2. Nf3 { fine } *',
+    );
+    expect(root).not.toBeNull();
+    if (!root) return;
+    const again = parsePgnTree(treeToPgn(root, { comments: true }));
+    expect(again).not.toBeNull();
+    if (!again) return;
+    const flat = (n: MoveNode): unknown[] => [
+      [n.san, n.evalCp, n.evalMate, n.clockSec, n.comment],
+      ...n.children.flatMap(flat),
+    ];
+    expect(flat(again)).toEqual(flat(root));
+    expect(shapeOf(again)).toEqual(shapeOf(root));
+  });
 });
 
 describe('subtreePgn', () => {
@@ -327,5 +467,89 @@ describe('subtreePgn', () => {
     expect(pgn).toContain(`[FEN "${leaf.fen}"]`);
     expect(pgn.trim().endsWith('*')).toBe(true);
     expect(pgn).not.toMatch(/\d\./);
+  });
+});
+
+describe('addVariation', () => {
+  const AFTER_E4_C5 = 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2';
+  const AFTER_E4_C5_NF3 = 'rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2';
+
+  test('on a node with a main move the line is a second child, written in parentheses', () => {
+    const root = parsePgnTree('1. e4 e5 *');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    const e4 = root.children[0];
+    const first = addVariation(e4, ['c5', 'Nf3']);
+    expect(first).not.toBeNull();
+    if (!first) return;
+    expect(e4.children).toHaveLength(2);
+    expect(e4.children[1]).toBe(first);
+    expect(treeToPgn(root)).toBe('1. e4 e5 (1... c5 2. Nf3) *');
+  });
+
+  test('the new nodes carry fen, from, to, color, depth, parent and unique ids', () => {
+    const root = parsePgnTree('1. e4 e5 *');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    const e4 = root.children[0];
+    const c5 = addVariation(e4, ['c5', 'Nf3']);
+    expect(c5).not.toBeNull();
+    if (!c5) return;
+    const nf3 = c5.children[0];
+    expect(c5).toMatchObject({ san: 'c5', fen: AFTER_E4_C5, from: 'c7', to: 'c5', color: 'b', depth: 2, id: 'pgn-1-v1-0' });
+    expect(c5.parent).toBe(e4);
+    expect(nf3).toMatchObject({ san: 'Nf3', fen: AFTER_E4_C5_NF3, from: 'g1', to: 'f3', color: 'w', depth: 3, id: 'pgn-1-v1-1' });
+    expect(nf3.parent).toBe(c5);
+    expect(nf3.children).toEqual([]);
+  });
+
+  test('on a leaf the line becomes the main continuation', () => {
+    const root = parsePgnTree('1. e4 e5 *');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    const e5 = root.children[0].children[0];
+    expect(addVariation(e5, ['Nf3'])).toBe(e5.children[0]);
+    expect(treeToPgn(root)).toBe('1. e4 e5 2. Nf3 *');
+    expect(e5.children[0].id).toBe('pgn-2-v0-0');
+  });
+
+  test('an illegal SAN anywhere in the line returns null and leaves children untouched', () => {
+    const root = parsePgnTree('1. e4 e5 *');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    const e4 = root.children[0];
+    expect(addVariation(e4, ['c5', 'Ke5'])).toBeNull();
+    expect(addVariation(e4, ['Qh5'])).toBeNull();
+    expect(e4.children.map((n) => n.san)).toEqual(['e5']);
+    expect(e4.children[0].children).toEqual([]);
+  });
+
+  test('an empty list returns null', () => {
+    const root = parsePgnTree('1. e4 e5 *');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    expect(addVariation(root.children[0], [])).toBeNull();
+    expect(root.children[0].children).toHaveLength(1);
+  });
+
+  test('a first move equal to the existing main move is still added as its own line', () => {
+    const root = parsePgnTree('1. e4 e5 *');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    const e4 = root.children[0];
+    const dup = addVariation(e4, ['e5']);
+    expect(dup).not.toBeNull();
+    expect(e4.children).toHaveLength(2);
+    expect(e4.children[1]).not.toBe(e4.children[0]);
+    expect(treeToPgn(root)).toBe('1. e4 e5 (1... e5) *');
+  });
+
+  test('subtreePgn output is unchanged by the comment fields', () => {
+    const root = parsePgnTree('1. e4 { [%eval 0.30] hello } e5 2. Nf3 *');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    expect(subtreePgn(root.children[0])).toBe(
+      '[SetUp "1"]\n[FEN "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"]\n\n1... e5 2. Nf3 *',
+    );
   });
 });
