@@ -1,5 +1,5 @@
 import { PgnReader } from '@mliebelt/pgn-reader';
-import { START_FEN, withPgnTags, fenMoveContext } from './chessUtils';
+import { START_FEN, withPgnTags, fenMoveContext, normalisePgnForReading } from './chessUtils';
 import { fenFields, fenFromFields } from './fen';
 import { setPieceAt } from './boardEditor';
 
@@ -33,7 +33,7 @@ export function createRoot(fen: string = START_FEN): MoveNode {
 
 /**
  * Parse a PGN string into a MoveNode tree, including all variations.
- * `null` when pgn-reader cannot parse it; an empty root for blank input.
+ * `null` when pgn-reader cannot parse it (or the main line holds a null move); an empty root for blank input.
  * This is the one place in the platform that reads a PGN (pgn-single-source-plan.md D1).
  *
  * Variations are added as siblings of the main move (both children of the
@@ -42,8 +42,11 @@ export function createRoot(fen: string = START_FEN): MoveNode {
  */
 export function parsePgnTree(pgn: string): MoveNode | null {
   if (!pgn.trim()) return createRoot();
+  // Read a normalised copy (pgn-check-single-source-plan.md D13); a null move in the main line stays unreadable.
+  const prepared = normalisePgnForReading(pgn);
+  if (prepared.mainLineNull) return null;
   try {
-    const reader = new PgnReader({ pgn, manyGames: false });
+    const reader = new PgnReader({ pgn: prepared.pgn, manyGames: false });
     const startFen = reader.setToStart();
     const root = createRoot(startFen);
 

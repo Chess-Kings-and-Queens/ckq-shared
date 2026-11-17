@@ -7,10 +7,12 @@ import {
   parsePgnHeader,
   withPgnTags,
   moveNumberLabel,
+  normalisePgnForReading,
   sanToUci,
   engineMovesFirst,
   START_FEN,
 } from '../chessUtils';
+import { parsePgnTree } from '../moveTree';
 
 const newGame = (fen?: string): ChessGame => {
   const g = ChessGame.fromFen(fen);
@@ -277,6 +279,83 @@ describe('withPgnTags', () => {
     const tags = { Event: 'E', Site: 'S', Date: '2026.10.19', Round: '1', White: 'A', Black: 'B', Result: '1-0', WhiteElo: '1500', FEN: SETUP_FEN };
     const parsed = parsePgnHeader(withPgnTags('7... Kd7 8. e4 *', tags));
     expect(parsed).toEqual({ ...tags, SetUp: '1' });
+  });
+});
+
+describe('normalisePgnForReading (pgn-check-single-source-plan.md D13)', () => {
+  const FEN_0_0 = '8/p4p1p/k7/8/8/4K3/P4P1P/8 w - - 0 0';
+  const FEN_0_1 = '8/p4p1p/k7/8/8/4K3/P4P1P/8 w - - 0 1';
+
+  test('escaped brackets in a tag value are unescaped; an escaped quote and backslash stay', () => {
+    const pgn = '[Black "\\[+0133.10g2b8\\]"]\n[White "say \\"hi\\" \\\\ ok"]\n\n1. e4 *';
+    const result = normalisePgnForReading(pgn);
+    expect(result.pgn).toBe('[Black "[+0133.10g2b8]"]\n[White "say \\"hi\\" \\\\ ok"]\n\n1. e4 *');
+    expect(result.nullVariations).toBe(0);
+    expect(result.mainLineNull).toBe(false);
+  });
+
+  test('escaped brackets in move text are left alone', () => {
+    const pgn = '[Event "x"]\n\n1. e4 { a \\[note\\] } e5 *';
+    expect(normalisePgnForReading(pgn).pgn).toBe(pgn);
+  });
+
+  test('a FEN with fullmove 0 reads as 1, in place, and no SetUp tag is added', () => {
+    const result = normalisePgnForReading(`[FEN "${FEN_0_0}"]\n\n1. Kf4 *`);
+    expect(result.pgn).toBe(`[FEN "${FEN_0_1}"]\n\n1. Kf4 *`);
+    expect(result.pgn).not.toContain('SetUp');
+  });
+
+  test('a FEN sharing a line with SetUp is edited in place', () => {
+    const result = normalisePgnForReading(`[SetUp "1"][FEN "${FEN_0_0}"]\n\n1. Kf4 *`);
+    expect(result.pgn).toBe(`[SetUp "1"][FEN "${FEN_0_1}"]\n\n1. Kf4 *`);
+  });
+
+  test('a four-field FEN gains its halfmove and fullmove', () => {
+    const result = normalisePgnForReading('[SetUp "1"]\n[FEN "8/p4p1p/k7/8/8/4K3/P4P1P/8 w - -"]\n\n1. Kf4 *');
+    expect(result.pgn).toBe(`[SetUp "1"]\n[FEN "${FEN_0_1}"]\n\n1. Kf4 *`);
+  });
+
+  test('a canonical PGN comes back as the same string', () => {
+    const pgn = `[SetUp "1"]\n[FEN "${FEN_0_1}"]\n\n1. Kf4 (1. Kd4) *`;
+    expect(normalisePgnForReading(pgn).pgn).toBe(pgn);
+  });
+
+  test('a FEN tag inside a move-text comment is left alone and the game still reads', () => {
+    const pgn = `[Event "x"]\n\n1. e4 { [FEN "${FEN_0_0}"] } e5 *`;
+    expect(normalisePgnForReading(pgn).pgn).toBe(pgn);
+    expect(parsePgnTree(pgn)).not.toBeNull();
+  });
+
+  test('a variation holding Z0 is removed and counted', () => {
+    const result = normalisePgnForReading('1. e4 e5 (1... c5 Z0) 2. Nf3 *');
+    expect(result).toEqual({ pgn: '1. e4 e5  2. Nf3 *', nullVariations: 1, mainLineNull: false });
+  });
+
+  test('a nested variation holding a null move removes only the inner one', () => {
+    const result = normalisePgnForReading('1. e4 e5 (1... c5 2. Nf3 (2. c3 Z0) 2... d6) 2. Nf3 *');
+    expect(result.pgn).toBe('1. e4 e5 (1... c5 2. Nf3  2... d6) 2. Nf3 *');
+    expect(result.nullVariations).toBe(1);
+  });
+
+  test('a variation holding -- is removed and counted', () => {
+    const result = normalisePgnForReading('1. e4 e5 (1... -- 2. d4) 2. Nf3 *');
+    expect(result).toEqual({ pgn: '1. e4 e5  2. Nf3 *', nullVariations: 1, mainLineNull: false });
+  });
+
+  test('Z0 and -- inside comments and tag values are untouched and uncounted', () => {
+    const pgn = '[White "Z0"]\n[Event "A -- B"]\n\n1. e4 { Z0 -- } e5 ; Z0 -- here\n2. Nf3 *';
+    expect(normalisePgnForReading(pgn)).toEqual({ pgn, nullVariations: 0, mainLineNull: false });
+  });
+
+  test('a parenthesis inside a comment is not a variation', () => {
+    const result = normalisePgnForReading('1. e4 { ( } e5 (1... c5 Z0) 2. Nf3 *');
+    expect(result.pgn).toBe('1. e4 { ( } e5  2. Nf3 *');
+    expect(result.nullVariations).toBe(1);
+  });
+
+  test('a null move in the main line sets mainLineNull and changes nothing', () => {
+    const pgn = '1. e4 Z0 2. Nf3 *';
+    expect(normalisePgnForReading(pgn)).toEqual({ pgn, nullVariations: 0, mainLineNull: true });
   });
 });
 

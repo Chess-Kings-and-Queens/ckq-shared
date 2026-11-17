@@ -100,6 +100,8 @@ const NEW_RUNTIME_EXPORTS = [
   'countdownParts',
   // homeworkUtils.ts
   'scoreTone',
+  // chessUtils.ts
+  'normalisePgnForReading',
   // pgnCheck.ts
   'checkPgn',
   'checkPgnText',
