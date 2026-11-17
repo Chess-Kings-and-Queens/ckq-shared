@@ -100,6 +100,15 @@ const NEW_RUNTIME_EXPORTS = [
   'countdownParts',
   // homeworkUtils.ts
   'scoreTone',
+  // pgnCheck.ts
+  'checkPgn',
+  'checkPgnText',
+  'firstBlockingMessage',
+  'repairPgnTags',
+  'repairPgnText',
+  'splitRatingFromName',
+  'PGN_ISSUE_CODES',
+  'PGN_ISSUE_MESSAGES',
 ] as const;
 
 describe('package root exports (v0.36.0)', () => {
