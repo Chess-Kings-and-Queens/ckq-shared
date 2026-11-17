@@ -1,5 +1,6 @@
 import { PgnReader } from '@mliebelt/pgn-reader';
-import { START_FEN, withPgnTags, fenMoveContext, normalisePgnForReading } from './chessUtils';
+import { START_FEN, withPgnTags, fenMoveContext, normalisePgnForReading, sanToMove } from './chessUtils';
+import { ChessGame } from './chessGame';
 import { fenFields, fenFromFields } from './fen';
 import { setPieceAt } from './boardEditor';
 
@@ -25,10 +26,37 @@ export interface MoveNode {
   depth: number;
   children: MoveNode[];
   parent: MoveNode | null;
+  /** Free text of the PGN comment after this move, trimmed. Absent when there is none. */
+  comment?: string;
+  /** `[%clk h:mm:ss]` after this move: the mover's remaining time, in whole seconds. */
+  clockSec?: number;
+  /** `[%eval]` after this move, from White's side as written, in centipawns. Never set together with `evalMate`. */
+  evalCp?: number;
+  /** `[%eval #N]` after this move: moves to mate, negative when Black mates. */
+  evalMate?: number;
 }
 
 export function createRoot(fen: string = START_FEN): MoveNode {
   return { id: 'root', san: '', fen, from: '', to: '', color: 'w', depth: 0, children: [], parent: null };
+}
+
+function parseClock(value: unknown): number | null {
+  if (typeof value !== 'string') return null;
+  const m = /^(\d+):([0-5]?\d):([0-5]?\d)(?:\.\d+)?$/.exec(value.trim());
+  return m ? Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]) : null;
+}
+
+function applyAnnotations(node: MoveNode, move: any): void { // pgn-reader's untyped move object
+  const text = typeof move.commentAfter === 'string' ? move.commentAfter.trim() : '';
+  if (text) node.comment = text;
+  const diag = move.commentDiag ?? {};
+  const clock = parseClock(diag.clk);
+  if (clock !== null) node.clockSec = clock;
+  // pgn-reader gives a number for [%eval 0.15], and a string for [%eval #-3] and for the depth form [%eval 0.15,18]
+  const raw = (typeof diag.eval === 'number' ? String(diag.eval) : typeof diag.eval === 'string' ? diag.eval : '').split(',')[0].trim();
+  const mate = /^#(-?\d+)$/.exec(raw);
+  if (mate) node.evalMate = Number(mate[1]);
+  else if (raw !== '' && Number.isFinite(Number(raw))) node.evalCp = Math.round(Number(raw) * 100);
 }
 
 /**
@@ -69,6 +97,7 @@ export function parsePgnTree(pgn: string): MoveNode | null {
         parent: parentNode,
       };
       parentNode.children.push(child);
+      applyAnnotations(child, move);
       // Variations are alternatives to this move from the same parent position
       // → add as siblings (also children of parentNode)
       for (const varMove of (move.variations ?? [])) {
@@ -107,13 +136,30 @@ export function mainLine(root: MoveNode): MoveNode[] {
 
 // ── PGN writer ─────────────────────────────────────────────────────────────────
 
+function formatClock(sec: number): string {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+/** `{ [%eval …] [%clk …] text }` for a node, or '' when it carries none of the three. */
+function commentToken(node: MoveNode): string {
+  const parts: string[] = [];
+  if (node.evalMate !== undefined) parts.push(`[%eval #${node.evalMate}]`);
+  else if (node.evalCp !== undefined) parts.push(`[%eval ${(node.evalCp / 100).toFixed(2)}]`);
+  if (node.clockSec !== undefined) parts.push(`[%clk ${formatClock(node.clockSec)}]`);
+  if (node.comment) parts.push(node.comment.replace(/[{}]/g, ''));
+  return parts.length ? `{ ${parts.join(' ')} }` : '';
+}
+
 /**
  * The move text of `node`'s subtree in PGN order: the node's main continuation, each
  * variation in parentheses after the move it is an alternative to, numbered from the
  * position the subtree starts at. `lineStart` forces a number on the first move
  * (a black move at a line start reads "5... Nf6").
  */
-function writeMoves(from: MoveNode, lineStart: boolean): string {
+function writeMoves(from: MoveNode, lineStart: boolean, comments: boolean): string {
   const parts: string[] = [];
   let node: MoveNode | undefined = from.children[0];
   let needNumber = lineStart;
@@ -123,12 +169,15 @@ function writeMoves(from: MoveNode, lineStart: boolean): string {
     const label = color === 'w' ? `${fullMove}.` : needNumber ? `${fullMove}...` : '';
     parts.push(label ? `${label} ${node.san}` : node.san);
     needNumber = false;
+    const token = comments ? commentToken(node) : '';
+    if (token) { parts.push(token); needNumber = true; }
     for (const alt of parent.children.slice(1)) {
       if (alt === node) continue;
       const altCtx = fenMoveContext(parent.fen);
       const altLabel = altCtx.color === 'w' ? `${altCtx.fullMove}.` : `${altCtx.fullMove}...`;
-      const rest = writeMoves(alt, false);
-      parts.push(`(${altLabel} ${alt.san}${rest ? ` ${rest}` : ''})`);
+      const altToken = comments ? commentToken(alt) : '';
+      const rest = writeMoves(alt, Boolean(altToken), comments);
+      parts.push(`(${altLabel} ${alt.san}${altToken ? ` ${altToken}` : ''}${rest ? ` ${rest}` : ''})`);
       needNumber = true;
     }
     node = node.children[0];
@@ -140,9 +189,10 @@ function writeMoves(from: MoveNode, lineStart: boolean): string {
  * The one PGN writer for a move tree with variations (liveboard-quiz-both-sides-plan D19).
  * Tags come from `withPgnTags`: a FEN tag (and SetUp) when the root is not the standard
  * start, nothing otherwise. Round-trips through `parsePgnTree`. An empty tree writes `*`.
+ * With `{ comments: true }` each move's evaluation, clock and comment text are written after it, and the result still round-trips through `parsePgnTree`.
  */
-export function treeToPgn(root: MoveNode): string {
-  const moveText = writeMoves(root, true);
+export function treeToPgn(root: MoveNode, opts: { comments?: boolean } = {}): string {
+  const moveText = writeMoves(root, true, opts.comments === true);
   const body = moveText ? `${moveText} *` : '*';
   return root.fen === START_FEN ? body : withPgnTags(body, { FEN: root.fen });
 }
@@ -150,6 +200,40 @@ export function treeToPgn(root: MoveNode): string {
 /** The PGN of the game from `node`'s position onward: `node.fen` as the start, `node.children` as the moves (D17). */
 export function subtreePgn(node: MoveNode): string {
   return treeToPgn({ ...createRoot(node.fen), children: node.children });
+}
+
+/**
+ * Appends `sans`, played from `parent`'s position, as a new line under `parent`: its last child, so a
+ * side variation when `parent` already has a main move, the main continuation when it has none.
+ * Returns the line's first node, or null (tree untouched) when `sans` is empty or any move is illegal.
+ * Never merges: a first move equal to an existing child still becomes its own line.
+ */
+export function addVariation(parent: MoveNode, sans: readonly string[]): MoveNode | null {
+  if (sans.length === 0) return null;
+  const slot = parent.children.length;
+  const line: MoveNode[] = [];
+  let fen = parent.fen;
+  for (let i = 0; i < sans.length; i++) {
+    const squares = sanToMove(fen, sans[i]);
+    const { game, applied } = ChessGame.replay(fen, [sans[i]]);
+    if (!squares || applied !== 1) return null;
+    const node: MoveNode = {
+      id: `${parent.id}-v${slot}-${i}`,
+      san: sans[i],
+      fen: game.fen,
+      from: squares.from,
+      to: squares.to,
+      color: fenMoveContext(fen).color,
+      depth: parent.depth + 1 + i,
+      children: [],
+      parent: i === 0 ? parent : line[i - 1],
+    };
+    if (i > 0) line[i - 1].children.push(node);
+    line.push(node);
+    fen = game.fen;
+  }
+  parent.children.push(line[0]);
+  return line[0];
 }
 
 // ── Promotion visual FEN ──────────────────────────────────────────────────────

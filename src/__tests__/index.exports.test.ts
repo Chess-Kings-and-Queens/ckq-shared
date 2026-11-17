@@ -13,6 +13,7 @@ const NEW_RUNTIME_EXPORTS = [
   // moveTree.ts
   'treeToPgn',
   'subtreePgn',
+  'addVariation',
   // types/liveboard.ts
   'QUIZ_VERDICTS',
   'QUIZ_MOVE_RESULT_STATUSES',
