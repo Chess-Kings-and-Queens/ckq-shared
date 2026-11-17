@@ -280,6 +280,63 @@ describe("splitPgnGames", () => {
   });
 });
 
+describe('splitPgnGames — tag-looking lines inside comments (pgn-check-single-source-plan.md D12)', () => {
+  const HEAD_A = '[Event "A"]\n[Result "*"]\n';
+  const GAME_B = '[Event "B"]\n[Result "*"]\n\n1. d4 d5 *';
+
+  test('a comment that wraps onto a line starting with a bracket stays one game', () => {
+    const pgn = `${HEAD_A}\n1. e4 { thinking it over\n[%emt 0:01:07]} e5 *\n\n${GAME_B}`;
+    const games = splitPgnGames(pgn);
+    expect(games).toHaveLength(2);
+    expect(games[0]).toContain('[%emt 0:01:07]} e5');
+    expect(games[1]).toBe(GAME_B);
+  });
+
+  test('a comment holding a tag on its own line does not split', () => {
+    const pgn = `${HEAD_A}\n1. e4 { a note\n[Event "x"]\nmore } e5 *\n\n${GAME_B}`;
+    const games = splitPgnGames(pgn);
+    expect(games).toHaveLength(2);
+    expect(games[0]).toContain('[Event "x"]');
+  });
+
+  test('two games that each have a wrapped comment give two', () => {
+    const wrapped = (name: string): string => `[Event "${name}"]\n[Result "*"]\n\n1. e4 { long\n[%emt 0:00:05]} e5 *`;
+    expect(splitPgnGames(`${wrapped('A')}\n\n${wrapped('B')}`)).toHaveLength(2);
+  });
+
+  test('CRLF line endings split the same way', () => {
+    const pgn = `${HEAD_A}\n1. e4 { thinking it over\n[%emt 0:01:07]} e5 *\n\n${GAME_B}`.replace(/\n/g, '\r\n');
+    expect(splitPgnGames(pgn)).toHaveLength(2);
+  });
+
+  test('a comment with an inner brace is closed by the first closing brace, so the next game still splits', () => {
+    const pgn = `${HEAD_A}\n1. e4 { eval {+1.5 } e5 *\n\n${GAME_B}`;
+    expect(splitPgnGames(pgn)).toHaveLength(2);
+  });
+
+  test('a line comment holding an opening brace does not start a comment, so the next game still splits', () => {
+    const pgn = `${HEAD_A}\n1. e4 ; note { here\ne5 *\n\n${GAME_B}`;
+    expect(splitPgnGames(pgn)).toHaveLength(2);
+  });
+
+  test('an unterminated comment keeps the rest of the text in one game', () => {
+    const pgn = `${HEAD_A}\n1. e4 { never closed\n\n${GAME_B}`;
+    expect(splitPgnGames(pgn)).toHaveLength(1);
+  });
+
+  test('a bracket line that is not a tag no longer starts a game', () => {
+    const pgn = `${HEAD_A}\n1. e4 e5\n[%csl Gg4] 2. Nf3 *\n\n${GAME_B}`;
+    const games = splitPgnGames(pgn);
+    expect(games).toHaveLength(2);
+    expect(games[0]).toContain('[%csl Gg4] 2. Nf3');
+  });
+
+  test('several tags on one line still start a game', () => {
+    const pgn = `${HEAD_A}\n1. e4 e5 *\n\n[Event "?"][Site "?"]\n\n1. d4 d5 *`;
+    expect(splitPgnGames(pgn)).toHaveLength(2);
+  });
+});
+
 describe('splitPgnGames — byte-order mark', () => {
   test('a BOM-prefixed two-game PGN splits into 2 games and the first does not start with the BOM', () => {
     const pgn = '\uFEFF[Event "A"]\n\n1. e4 e5 *\n\n[Event "B"]\n\n1. d4 d5 *';

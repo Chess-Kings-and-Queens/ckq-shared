@@ -321,6 +321,15 @@ describe('gradePositionAttempt', () => {
     });
   });
 
+  test('a solution with a null-move variation grades its main line', () => {
+    const pgn = '1. e4 e5 (1... c5 Z0) 2. Nf3 Nc6 *';
+    expect(gradePositionAttempt(pgn, ['e4', 'e5', 'Nf3', 'Nc6'])).toMatchObject({
+      isCorrect: true,
+      score: 100,
+      result: MoveResult.Correct,
+    });
+  });
+
   test('three-player-move line: all correct is 100', () => {
     const g = gradePositionAttempt(THREE_MOVE_PGN, THREE_MOVE_SANS);
     expect(g.isCorrect).toBe(true);

@@ -183,8 +183,55 @@ describe('splitRatingFromName', () => {
   });
 });
 
+describe('checkPgn — positions and null moves (pgn-check-single-source-plan.md D14)', () => {
+  const TAGS = '[White "A"]\n[Black "B"]\n[Result "*"]';
+  const SETUP = '[SetUp "1"]\n[FEN "4k3/8/8/8/8/8/8/R3K3 w - - 0 1"]';
+  const FEN_ONLY = `${TAGS}\n${SETUP}\n\n*`;
+
+  test('a position with no moves is no-moves by default', () => {
+    expect(checkPgn(FEN_ONLY)).toEqual({ usable: false, plies: 0, issues: [{ code: 'no-moves', severity: 'blocking' }] });
+  });
+
+  test('a position with no moves is an advisory position-only when positions are allowed', () => {
+    expect(checkPgn(FEN_ONLY, { positions: 'allow' })).toEqual({
+      usable: true,
+      plies: 0,
+      issues: [{ code: 'position-only', severity: 'advisory' }],
+    });
+    expect(checkPgn(FEN_ONLY, { positions: 'reject' }).usable).toBe(false);
+  });
+
+  test.each([
+    ['no FEN', `${TAGS}\n\n*`],
+    ['a FEN that is not a FEN', `${TAGS}\n[SetUp "1"]\n[FEN "not a fen"]\n\n*`],
+    ['a FEN with no SetUp tag, which the reader ignores', `${TAGS}\n[FEN "4k3/8/8/8/8/8/8/R3K3 w - - 0 1"]\n\n*`],
+  ])('allowing positions does not excuse %s', (_label, pgn) => {
+    expect(checkPgn(pgn, { positions: 'allow' }).issues).toEqual([{ code: 'no-moves', severity: 'blocking' }]);
+  });
+
+  test('a null move in the main line is unreadable only', () => {
+    expect(checkPgn(`${TAGS}\n\n1. e4 Z0 2. Nf3 *`, { positions: 'allow' })).toEqual({
+      usable: false,
+      plies: 0,
+      issues: [{ code: 'unreadable', severity: 'blocking' }],
+    });
+  });
+
+  test('a null move in a variation is an advisory null-move and the game stays usable', () => {
+    const result = checkPgn(`${TAGS}\n\n1. e4 e5 (1... c5 Z0) 2. Nf3 *`);
+    expect(result).toEqual({ usable: true, plies: 3, issues: [{ code: 'null-move', severity: 'advisory' }] });
+  });
+
+  test('checkPgnText passes the option to every game', () => {
+    expect(checkPgnText(FEN_ONLY).checks[0].usable).toBe(false);
+    expect(checkPgnText(FEN_ONLY, { positions: 'allow' }).checks[0].usable).toBe(true);
+  });
+});
+
 describe('PGN_ISSUE_CODES', () => {
-  test('lists the five codes', () => {
-    expect([...PGN_ISSUE_CODES]).toEqual(['unreadable', 'no-moves', 'rating-in-name', 'missing-player', 'missing-result']);
+  test('lists the seven codes', () => {
+    expect([...PGN_ISSUE_CODES]).toEqual([
+      'unreadable', 'no-moves', 'rating-in-name', 'missing-player', 'missing-result', 'position-only', 'null-move',
+    ]);
   });
 });

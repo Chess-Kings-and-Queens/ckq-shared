@@ -146,6 +146,54 @@ describe('parsePgnTree', () => {
   });
 });
 
+describe('parsePgnTree — tolerant reading (pgn-check-single-source-plan.md D13)', () => {
+  const FEN_0_0 = '8/p4p1p/k7/8/8/4K3/P4P1P/8 w - - 0 0';
+  const STUDY = '[Black "\\[+0133.10g2b8\\]"]\n[Result "*"]\n\n1. e4 e5 *';
+  const FEN_GAME = `[SetUp "1"]\n[FEN "${FEN_0_0}"]\n\n1. Kf4 *`;
+  const NULL_VARIATION = '1. e4 e5 (1... Z0 2. d4) 2. Nf3 Nc6 *';
+  const crlf = (pgn: string): string => pgn.replace(/\n/g, '\r\n');
+
+  test.each([
+    ['a study code with escaped brackets in a tag value', STUDY, 2],
+    ['a FEN whose fullmove is 0', FEN_GAME, 1],
+    ['a variation holding a null move', NULL_VARIATION, 4],
+  ])('reads %s', (_label, pgn, plies) => {
+    for (const text of [pgn, crlf(pgn)]) {
+      const root = parsePgnTree(text);
+      expect(root).not.toBeNull();
+      if (root) expect(mainLine(root)).toHaveLength(plies);
+    }
+  });
+
+  test('the null-move variation is absent and the ids stay sequential and unique', () => {
+    const root = parsePgnTree(NULL_VARIATION);
+    expect(root).not.toBeNull();
+    if (!root) return;
+    expect(mainLine(root).map((n) => n.san)).toEqual(['e4', 'e5', 'Nf3', 'Nc6']);
+    expect(root.children[0].children[0].children.map((n) => n.san)).toEqual(['Nf3']);
+    expect(mainLine(root).map((n) => n.id)).toEqual(['pgn-1', 'pgn-2', 'pgn-3', 'pgn-4']);
+  });
+
+  test.each(['1. e4 Z0 2. Nf3 *', '1. e4 e5 2. Nf3 -- 3. d4 *'])('a null move in the main line stays unreadable: %s', (pgn) => {
+    expect(parsePgnTree(pgn)).toBeNull();
+  });
+
+  test('Z0 and -- inside a comment are not null moves', () => {
+    const root = parsePgnTree('1. e4 { white -- black Z0 } e5 *');
+    expect(root && mainLine(root)).toHaveLength(2);
+  });
+
+  test('a ; comment holding Z0 is not a null move', () => {
+    const root = parsePgnTree('1. e4 ; Z0 here\ne5 *');
+    expect(root && mainLine(root)).toHaveLength(2);
+  });
+
+  test('a set-up FEN with fullmove 0 and no moves is the root position', () => {
+    const root = parsePgnTree(`[SetUp "1"]\n[FEN "${FEN_0_0}"]\n\n*`);
+    expect(root?.fen).toBe('8/p4p1p/k7/8/8/4K3/P4P1P/8 w - - 0 1');
+  });
+});
+
 describe('parsePgnTree — node ids (pgn-tree-unique-node-ids-plan.md D1)', () => {
   // Two sibling variations open with the same move at two different points.
   const SAME_MOVE_SIBLINGS =

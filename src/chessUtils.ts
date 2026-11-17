@@ -1,5 +1,5 @@
 import { ChessGame } from './chessGame';
-import { fenFields } from './fen';
+import { fenFields, fenFromFields } from './fen';
 
 /**
  * Convert a single UCI move (e.g. "e2e4", "a7a8q") to SAN given the position FEN.
@@ -63,27 +63,46 @@ export function truncateMoveString(
   return { display: kept.join(' ') + '…', truncated: true, full };
 }
 
-/** Split a multi-game PGN file into individual game strings. A leading byte-order mark is dropped. */
+/** The start of a PGN tag line: `[Name "`. The splitter and the reading normaliser share this one definition. */
+const PGN_TAG_START = /^\[\w+\s+"/;
+
+/**
+ * Split a multi-game PGN file into individual game strings. A leading byte-order mark is dropped.
+ * A new game starts at a tag line that comes after move text and is not inside a `{ }` comment
+ * (pgn-check-single-source-plan.md D12): comments do not nest, and a `;` starts a line comment.
+ * An unterminated `{` keeps the rest of the text in one game.
+ */
 export function splitPgnGames(raw: string): string[] {
   const lines = raw.replace(/^\uFEFF/, '').split('\n');
   const games: string[] = [];
   let current: string[] = [];
   let seenMoves = false; // true once we've accumulated non-header, non-blank content
+  let inComment = false; // inside a `{ }` comment at the end of the previous line
 
   for (const line of lines) {
     const trimmed = line.trim();
-    const isTagLine = trimmed.startsWith('[');
+    const isTagLine = !inComment && PGN_TAG_START.test(trimmed);
 
     if (isTagLine && seenMoves) {
       // A new game's header block is starting — flush the completed game
       games.push(current.join('\n').trim());
       current = [line];
       seenMoves = false;
+      inComment = false;
     } else {
       current.push(line);
       // Any non-tag, non-blank line counts as move text
       if (!isTagLine && trimmed.length > 0) {
         seenMoves = true;
+        for (const ch of trimmed) {
+          if (inComment) {
+            if (ch === '}') inComment = false;
+          } else if (ch === '{') {
+            inComment = true;
+          } else if (ch === ';') {
+            break; // the rest of the line is a line comment
+          }
+        }
       }
     }
   }
@@ -91,6 +110,89 @@ export function splitPgnGames(raw: string): string[] {
   // Flush the final game
   if (current.length > 0) games.push(current.join('\n').trim());
   return games.filter((g) => g.length > 0);
+}
+
+/** Character ranges `[start, end)` of every variation in `moves` that holds a null move, and whether the main line holds one. */
+function findNullVariations(moves: string): { ranges: [number, number][]; mainLineNull: boolean } {
+  const ranges: [number, number][] = [];
+  const open: { start: number; hasNull: boolean }[] = [];
+  let mainLineNull = false;
+  let inComment = false;
+  let i = 0;
+  while (i < moves.length) {
+    const ch = moves[i];
+    if (inComment) {
+      if (ch === '}') inComment = false;
+      i += 1;
+    } else if (ch === '{') {
+      inComment = true;
+      i += 1;
+    } else if (ch === ';') {
+      const eol = moves.indexOf('\n', i);
+      i = eol === -1 ? moves.length : eol;
+    } else if (ch === '(') {
+      open.push({ start: i, hasNull: false });
+      i += 1;
+    } else if (ch === ')') {
+      const variation = open.pop();
+      if (variation?.hasNull) ranges.push([variation.start, i + 1]);
+      i += 1;
+    } else if (/\s/.test(ch)) {
+      i += 1;
+    } else {
+      let end = i;
+      while (end < moves.length && !/[\s(){;]/.test(moves[end])) end += 1;
+      const token = moves.slice(i, end);
+      if (token === 'Z0' || token === '--') {
+        if (open.length > 0) open[open.length - 1].hasNull = true;
+        else mainLineNull = true;
+      }
+      i = end;
+    }
+  }
+  return { ranges, mainLineNull };
+}
+
+/**
+ * Make a PGN readable by the one reader without changing what it means
+ * (pgn-check-single-source-plan.md D13). Pure text work on a copy; returns the input itself when
+ * nothing changed. The tag block is the leading run of blank and tag lines; the rest is move text.
+ *   1. Tag block: `\[` and `\]` become `[` and `]` (PGN allows only `\"` and `\\` in a tag value).
+ *   2. Tag block: a `FEN` value is rewritten in place to its six canonical fields, so a fullmove
+ *      of 0 reads as 1. No tag is added or moved.
+ *   3. Move text: each variation holding a null move (`Z0`, `--`) is removed whole, innermost
+ *      first, and counted. A null move in the main line removes nothing and sets `mainLineNull`.
+ */
+export function normalisePgnForReading(pgn: string): { pgn: string; nullVariations: number; mainLineNull: boolean } {
+  const lines = pgn.split('\n');
+  let tagEnd = 0;
+  while (tagEnd < lines.length && (lines[tagEnd].trim() === '' || PGN_TAG_START.test(lines[tagEnd].trim()))) tagEnd += 1;
+
+  const tagBlock = lines
+    .slice(0, tagEnd)
+    .join('\n')
+    .replace(/\\(\\|\[|\])/g, (escape, char: string) => (char === '\\' ? escape : char))
+    .replace(/\[FEN\s+"([^"]*)"\]/, (tag, value: string) => {
+      const fields = fenFields(value);
+      const canonical = fields ? fenFromFields(fields) : value;
+      return canonical === value ? tag : tag.replace(value, canonical);
+    });
+
+  let moves = lines.slice(tagEnd).join('\n');
+  const { ranges, mainLineNull } = findNullVariations(moves);
+  if (ranges.length > 0) {
+    let kept = '';
+    let from = 0;
+    for (const [start, end] of [...ranges].sort((a, b) => a[0] - b[0])) {
+      if (start < from) continue; // inside a variation already removed
+      kept += moves.slice(from, start);
+      from = end;
+    }
+    moves = kept + moves.slice(from);
+  }
+
+  const out = tagEnd === 0 ? moves : tagEnd === lines.length ? tagBlock : `${tagBlock}\n${moves}`;
+  return { pgn: out, nullVariations: ranges.length, mainLineNull };
 }
 
 export const START_FEN =

@@ -1,10 +1,12 @@
 // The one PGN acceptance check and tag repair in the platform (docs/plans/pgn-check-single-source-plan.md).
 // Reads through `parsePgnTree`/`parsePgnHeader`, writes tags through `withPgnTags`.
 
-import { parsePgnHeader, splitPgnGames, withPgnTags } from './chessUtils';
+import { START_FEN, normalisePgnForReading, parsePgnHeader, splitPgnGames, withPgnTags } from './chessUtils';
 import { mainLine, parsePgnTree } from './moveTree';
 
-export const PGN_ISSUE_CODES = ['unreadable', 'no-moves', 'rating-in-name', 'missing-player', 'missing-result'] as const;
+export const PGN_ISSUE_CODES = [
+  'unreadable', 'no-moves', 'rating-in-name', 'missing-player', 'missing-result', 'position-only', 'null-move',
+] as const;
 export type PgnIssueCode = typeof PGN_ISSUE_CODES[number];
 export type PgnIssueSeverity = 'blocking' | 'fixable' | 'advisory';
 export interface PgnIssue { code: PgnIssueCode; severity: PgnIssueSeverity; side?: 'white' | 'black'; }
@@ -36,13 +38,22 @@ function sideTags(tags: Record<string, string>, side: 'white' | 'black'): { name
   return side === 'white' ? { name: tags.White, elo: tags.WhiteElo } : { name: tags.Black, elo: tags.BlackElo };
 }
 
-/** Check one game: blocking issues make it unusable, the rest are tag quality. */
-export function checkPgn(pgn: string): PgnCheck {
+/**
+ * Check one game: blocking issues make it unusable, the rest are tag quality. A game with no moves
+ * is `no-moves`, unless `positions: 'allow'` and the reader set up a position (a lesson diagram,
+ * a pasted position): then it is the advisory `position-only`. A variation left out of the read
+ * because it holds a null move is the advisory `null-move`.
+ */
+export function checkPgn(pgn: string, opts: { positions?: 'allow' | 'reject' } = {}): PgnCheck {
   const root = parsePgnTree(pgn);
   if (root === null) return { usable: false, plies: 0, issues: [{ code: 'unreadable', severity: 'blocking' }] };
   const issues: PgnIssue[] = [];
   const plies = mainLine(root).length;
-  if (plies === 0) issues.push({ code: 'no-moves', severity: 'blocking' });
+  if (plies === 0) {
+    if (opts.positions === 'allow' && root.fen !== START_FEN) issues.push({ code: 'position-only', severity: 'advisory' });
+    else issues.push({ code: 'no-moves', severity: 'blocking' });
+  }
+  if (normalisePgnForReading(pgn).nullVariations > 0) issues.push({ code: 'null-move', severity: 'advisory' });
   const tags = parsePgnHeader(pgn);
   for (const side of SIDES) {
     const { name, elo } = sideTags(tags, side);
@@ -58,9 +69,9 @@ export function checkPgn(pgn: string): PgnCheck {
 }
 
 /** Check a text that may hold several games; blank text holds none. */
-export function checkPgnText(raw: string): { games: number; checks: PgnCheck[] } {
+export function checkPgnText(raw: string, opts: { positions?: 'allow' | 'reject' } = {}): { games: number; checks: PgnCheck[] } {
   if (!raw.trim()) return { games: 0, checks: [] };
-  const checks = splitPgnGames(raw).map(checkPgn);
+  const checks = splitPgnGames(raw).map((game) => checkPgn(game, opts));
   return { games: checks.length, checks };
 }
 
