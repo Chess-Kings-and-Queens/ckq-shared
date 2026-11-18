@@ -34,6 +34,8 @@ export interface MoveNode {
   evalCp?: number;
   /** `[%eval #N]` after this move: moves to mate, negative when Black mates. */
   evalMate?: number;
+  /** Numeric annotation glyphs after this move (`!` is 1, `?` is 2 …), in PGN order. Absent when there are none. */
+  nags?: number[];
 }
 
 export function createRoot(fen: string = START_FEN): MoveNode {
@@ -47,6 +49,10 @@ function parseClock(value: unknown): number | null {
 }
 
 function applyAnnotations(node: MoveNode, move: any): void { // pgn-reader's untyped move object
+  const nags = (Array.isArray(move.nag) ? move.nag : [])
+    .map((n: unknown) => (typeof n === 'string' ? Number(n.replace(/^\$/, '')) : NaN))
+    .filter((n: number) => Number.isInteger(n) && n >= 0 && n <= 255);
+  if (nags.length) node.nags = nags;
   const text = typeof move.commentAfter === 'string' ? move.commentAfter.trim() : '';
   if (text) node.comment = text;
   const diag = move.commentDiag ?? {};
@@ -143,6 +149,11 @@ function formatClock(sec: number): string {
   return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+/** ` $n` tokens for a node's move symbols, or '' when it has none. */
+function nagTokens(node: MoveNode): string {
+  return node.nags?.map((n) => `$${n}`).join(' ') ?? '';
+}
+
 /** `{ [%eval …] [%clk …] text }` for a node, or '' when it carries none of the three. */
 function commentToken(node: MoveNode): string {
   const parts: string[] = [];
@@ -169,15 +180,18 @@ function writeMoves(from: MoveNode, lineStart: boolean, comments: boolean): stri
     const label = color === 'w' ? `${fullMove}.` : needNumber ? `${fullMove}...` : '';
     parts.push(label ? `${label} ${node.san}` : node.san);
     needNumber = false;
+    const nagToken = comments ? nagTokens(node) : '';
+    if (nagToken) parts.push(nagToken);
     const token = comments ? commentToken(node) : '';
     if (token) { parts.push(token); needNumber = true; }
     for (const alt of parent.children.slice(1)) {
       if (alt === node) continue;
       const altCtx = fenMoveContext(parent.fen);
       const altLabel = altCtx.color === 'w' ? `${altCtx.fullMove}.` : `${altCtx.fullMove}...`;
+      const altNag = comments ? nagTokens(alt) : '';
       const altToken = comments ? commentToken(alt) : '';
       const rest = writeMoves(alt, Boolean(altToken), comments);
-      parts.push(`(${altLabel} ${alt.san}${altToken ? ` ${altToken}` : ''}${rest ? ` ${rest}` : ''})`);
+      parts.push(`(${altLabel} ${alt.san}${altNag ? ` ${altNag}` : ''}${altToken ? ` ${altToken}` : ''}${rest ? ` ${rest}` : ''})`);
       needNumber = true;
     }
     node = node.children[0];
@@ -189,7 +203,7 @@ function writeMoves(from: MoveNode, lineStart: boolean, comments: boolean): stri
  * The one PGN writer for a move tree with variations (liveboard-quiz-both-sides-plan D19).
  * Tags come from `withPgnTags`: a FEN tag (and SetUp) when the root is not the standard
  * start, nothing otherwise. Round-trips through `parsePgnTree`. An empty tree writes `*`.
- * With `{ comments: true }` each move's evaluation, clock and comment text are written after it, and the result still round-trips through `parsePgnTree`.
+ * With `{ comments: true }` each move's symbols (`$n`), evaluation, clock and comment text are written after it, and the result still round-trips through `parsePgnTree`.
  */
 export function treeToPgn(root: MoveNode, opts: { comments?: boolean } = {}): string {
   const moveText = writeMoves(root, true, opts.comments === true);
@@ -234,6 +248,68 @@ export function addVariation(parent: MoveNode, sans: readonly string[]): MoveNod
   }
   parent.children.push(line[0]);
   return line[0];
+}
+
+/** True when the node carries any annotation (comment, move symbol, clock or evaluation). */
+export function hasAnnotations(node: MoveNode): boolean {
+  return Boolean(node.comment) || Boolean(node.nags?.length) || node.clockSec !== undefined
+    || node.evalCp !== undefined || node.evalMate !== undefined;
+}
+
+/** Remove every annotation from one node; returns whether anything was removed. */
+export function clearNodeAnnotations(node: MoveNode): boolean {
+  const had = node.comment !== undefined || node.nags !== undefined || node.clockSec !== undefined
+    || node.evalCp !== undefined || node.evalMate !== undefined;
+  delete node.comment;
+  delete node.nags;
+  delete node.clockSec;
+  delete node.evalCp;
+  delete node.evalMate;
+  return had;
+}
+
+/** Remove every annotation from `root` and all its descendants (variations included); returns the number of nodes changed. */
+export function clearAllAnnotations(root: MoveNode): number {
+  let changed = clearNodeAnnotations(root) ? 1 : 0;
+  for (const child of root.children) changed += clearAllAnnotations(child);
+  return changed;
+}
+
+const NAG_SYMBOLS: Record<number, string> = {
+  1: '!', 2: '?', 3: '!!', 4: '??', 5: '!?', 6: '?!', 7: '□', 10: '=', 13: '∞', 14: '⩲', 15: '⩱',
+  16: '±', 17: '∓', 18: '+−', 19: '−+', 22: '⨀', 23: '⨀', 32: '⟳', 33: '⟳', 36: '→', 37: '→',
+  40: '↑', 41: '↑', 132: '⇆', 133: '⇆', 138: '⊕', 139: '⊕', 140: '∆', 146: 'N',
+};
+
+/** The display symbol of a NAG code, or null when the code has none. */
+export function nagSymbol(code: number): string | null {
+  return Object.prototype.hasOwnProperty.call(NAG_SYMBOLS, code) ? NAG_SYMBOLS[code] : null;
+}
+
+/** Whether a NAG code reads as a good move, a bad move, or neither. */
+export function nagKind(code: number): 'good' | 'bad' | 'neutral' {
+  if (code === 1 || code === 3 || code === 5) return 'good';
+  if (code === 2 || code === 4 || code === 6) return 'bad';
+  return 'neutral';
+}
+
+/** `h:mm:ss` from one hour up, else `m:ss`; whole seconds, clamped at 0. */
+export function formatGameClock(sec: number): string {
+  const total = Math.max(0, Math.floor(sec));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const ss = String(total % 60).padStart(2, '0');
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
+}
+
+/** `+0.35`, `−1.20` (U+2212), `0.00`, `#3`, `#−2`; null when the node has no evaluation. */
+export function formatNodeEval(node: MoveNode): string | null {
+  if (node.evalMate !== undefined) return `#${node.evalMate < 0 ? '\u2212' : ''}${Math.abs(node.evalMate)}`;
+  if (node.evalCp === undefined) return null;
+  const abs = (Math.abs(node.evalCp) / 100).toFixed(2);
+  if (node.evalCp > 0) return `+${abs}`;
+  if (node.evalCp < 0) return `\u2212${abs}`;
+  return abs;
 }
 
 // ── Promotion visual FEN ──────────────────────────────────────────────────────
