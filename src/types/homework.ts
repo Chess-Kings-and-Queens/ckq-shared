@@ -39,6 +39,18 @@ export function puzzleTypeRules(type: string | null | undefined): Readonly<Puzzl
   return (PUZZLE_TYPE_RULES as Record<string, Readonly<PuzzleTypeRules>>)[type ?? ''] ?? PUZZLE_TYPE_RULES.regular;
 }
 
+/** What a student is told while solving a puzzle of each type; null = nothing extra. One string for the liveboard quiz dialog, the website puzzle board and the app's puzzle screen. */
+export const PUZZLE_TYPE_STUDENT_NOTES: Readonly<Record<PuzzleType, string | null>> = Object.freeze({
+  regular: null,
+  withOpponentMoves: "You have to find your opponent's best move as well.",
+  withVariations: null,
+});
+
+/** The note for a type; an unknown or missing value has none (the same fallback as `puzzleTypeRules`). */
+export function puzzleTypeStudentNote(type: string | null | undefined): string | null {
+  return (PUZZLE_TYPE_STUDENT_NOTES as Record<string, string | null>)[type ?? ''] ?? null;
+}
+
 /** One entry of GET /homework/:id/puzzle `lines`, parallel to `games` (D8, D14 of the prior plan; D5 here): the 0-based PGN game the line came from; for a variation line the opponent's alternative move as a numbered label (`"5... Nf6"`), the FEN it was played from and its bare SAN (`"Nf6"`), so the client can replay it before the student's first move; all three null for a main line. */
 export interface HomeworkPuzzleLine { game: number; branchMove: string | null; branchFen: string | null; branchSan: string | null }
 
