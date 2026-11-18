@@ -1,4 +1,4 @@
-import { createRoot, buildTreeFromPgn, movePieceInFen, parsePgnTree, mainLine, treeToPgn, subtreePgn, addVariation, type MoveNode } from '../moveTree';
+import { createRoot, buildTreeFromPgn, movePieceInFen, parsePgnTree, mainLine, treeToPgn, subtreePgn, addVariation, hasAnnotations, clearNodeAnnotations, clearAllAnnotations, nagSymbol, nagKind, formatGameClock, formatNodeEval, type MoveNode } from '../moveTree';
 import { START_FEN } from '../chessUtils';
 
 describe('createRoot', () => {
@@ -262,13 +262,28 @@ describe('parsePgnTree — move annotations', () => {
     expect(c4).not.toHaveProperty('clockSec');
   });
 
-  test('a move with no comment has none of the four keys', () => {
+  test('a move with no comment has none of the five keys', () => {
     const root = parsePgnTree('1. e4 e5 *');
     expect(root).not.toBeNull();
     if (!root) return;
     for (const node of mainLine(root)) {
-      for (const key of ['comment', 'clockSec', 'evalCp', 'evalMate']) expect(node).not.toHaveProperty(key);
+      for (const key of ['comment', 'nags', 'clockSec', 'evalCp', 'evalMate']) expect(node).not.toHaveProperty(key);
     }
+  });
+
+  test('reads move symbols as NAG codes, on variation moves too, and none when absent', () => {
+    const root = parsePgnTree('1. e4! e5?! 2. Nf3 $1 $14 Nc6?? (2... d6!?) *');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    const [e4, e5, nf3, nc6] = mainLine(root);
+    expect(e4.nags).toEqual([1]);
+    expect(e5.nags).toEqual([6]);
+    expect(nf3.nags).toEqual([1, 14]);
+    expect(nc6.nags).toEqual([4]);
+    expect(nf3.children[1].san).toBe('d6');
+    expect(nf3.children[1].nags).toEqual([5]);
+    const plain = parsePgnTree('1. e4 e5 *');
+    expect(plain?.children[0]).not.toHaveProperty('nags');
   });
 
   test.each([
@@ -393,7 +408,7 @@ describe('treeToPgn', () => {
   });
 
   test('with no second argument an annotated tree writes no comments', () => {
-    const root = parsePgnTree('1. d4 { [%eval 0.15] [%clk 1:30:52] } 1... Nf6 { [%eval #-3] good move } 2. c4 { plain } *');
+    const root = parsePgnTree('1. d4 $1 { [%eval 0.15] [%clk 1:30:52] } 1... Nf6 { [%eval #-3] good move } 2. c4 { plain } *');
     expect(root).not.toBeNull();
     if (!root) return;
     expect(treeToPgn(root)).toBe('1. d4 Nf6 2. c4 *');
@@ -418,6 +433,37 @@ describe('treeToPgn', () => {
     expect(treeToPgn(root)).toBe('1. e4 e5 (1... c5 2. Nf3) 2. Nf3 *');
   });
 
+  test('comments: true writes move symbols as $n after the move, before the comment, and in variations', () => {
+    const root = parsePgnTree('1. e4! { [%clk 0:10:00] best } e5?! 2. Nf3 $1 $14 Nc6?? (2... d6!? { odd } 3. d4) *');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    const out = treeToPgn(root, { comments: true });
+    expect(out).toContain('1. e4 $1 { [%clk 0:10:00] best }');
+    expect(out).toContain('e5 $6');
+    expect(out).toContain('2. Nf3 $1 $14');
+    expect(out).toContain('(2... d6 $5 { odd } 3. d4)');
+    expect(treeToPgn(root)).toBe('1. e4 e5 2. Nf3 Nc6 (2... d6 3. d4) *');
+  });
+
+  test('comments: true round-trips move symbols', () => {
+    const root = parsePgnTree('1. e4! e5?! 2. Nf3 $1 $14 Nc6?? (2... d6!?) *');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    const again = parsePgnTree(treeToPgn(root, { comments: true }));
+    expect(again).not.toBeNull();
+    if (!again) return;
+    const flat = (n: MoveNode): unknown[] => [[n.san, n.nags], ...n.children.flatMap(flat)];
+    expect(flat(again)).toEqual(flat(root));
+  });
+
+  test('after clearAllAnnotations the comments writer equals the plain writer', () => {
+    const root = parsePgnTree('1. e4! { [%eval 0.3] [%clk 0:10:00] hi } e5 (1... c5 $2 { x }) *');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    clearAllAnnotations(root);
+    expect(treeToPgn(root, { comments: true })).toBe(treeToPgn(root));
+  });
+
   test('comments: true strips braces from comment text', () => {
     const root = parsePgnTree('1. e4 *');
     expect(root).not.toBeNull();
@@ -428,7 +474,7 @@ describe('treeToPgn', () => {
 
   test('comments: true round-trips through parsePgnTree', () => {
     const root = parsePgnTree(
-      '1. e4 { [%eval 0.30] [%clk 1:30:00] } e5 { [%eval -0.25] } (1... c5 { [%eval #2] [%clk 0:59:59] sharp } 2. Nf3 { [%clk 0:10:00] }) 2. Nf3 { fine } *',
+      '1. e4 $1 { [%eval 0.30] [%clk 1:30:00] } e5 { [%eval -0.25] } (1... c5 $5 { [%eval #2] [%clk 0:59:59] sharp } 2. Nf3 { [%clk 0:10:00] }) 2. Nf3 { fine } *',
     );
     expect(root).not.toBeNull();
     if (!root) return;
@@ -436,7 +482,7 @@ describe('treeToPgn', () => {
     expect(again).not.toBeNull();
     if (!again) return;
     const flat = (n: MoveNode): unknown[] => [
-      [n.san, n.evalCp, n.evalMate, n.clockSec, n.comment],
+      [n.san, n.nags, n.evalCp, n.evalMate, n.clockSec, n.comment],
       ...n.children.flatMap(flat),
     ];
     expect(flat(again)).toEqual(flat(root));
@@ -545,11 +591,83 @@ describe('addVariation', () => {
   });
 
   test('subtreePgn output is unchanged by the comment fields', () => {
-    const root = parsePgnTree('1. e4 { [%eval 0.30] hello } e5 2. Nf3 *');
+    const root = parsePgnTree('1. e4 $1 { [%eval 0.30] hello } e5 2. Nf3 *');
     expect(root).not.toBeNull();
     if (!root) return;
     expect(subtreePgn(root.children[0])).toBe(
       '[SetUp "1"]\n[FEN "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"]\n\n1... e5 2. Nf3 *',
     );
+  });
+});
+
+describe('annotation helpers', () => {
+  const PGN = '1. e4! { [%eval 0.30] [%clk 0:10:00] best } e5 (1... c5 $2 { sharp } 2. Nf3) 2. Nf3 *';
+  const parsed = (): MoveNode => {
+    const root = parsePgnTree(PGN);
+    if (!root) throw new Error('fixture PGN did not parse');
+    return root;
+  };
+
+  test('hasAnnotations is true for each key alone and false for a clean node or nags: []', () => {
+    const node = (extra: Partial<MoveNode>): MoveNode => ({ ...createRoot(), ...extra });
+    expect(hasAnnotations(node({}))).toBe(false);
+    expect(hasAnnotations(node({ nags: [] }))).toBe(false);
+    expect(hasAnnotations(node({ comment: 'x' }))).toBe(true);
+    expect(hasAnnotations(node({ nags: [1] }))).toBe(true);
+    expect(hasAnnotations(node({ clockSec: 0 }))).toBe(true);
+    expect(hasAnnotations(node({ evalCp: 0 }))).toBe(true);
+    expect(hasAnnotations(node({ evalMate: 2 }))).toBe(true);
+  });
+
+  test('clearNodeAnnotations removes all five keys, returns false on a clean node, leaves children alone', () => {
+    const root = parsed();
+    const e4 = root.children[0];
+    const e5 = e4.children[0];
+    e5.comment = 'keep me';
+    expect(clearNodeAnnotations(e4)).toBe(true);
+    for (const key of ['comment', 'nags', 'clockSec', 'evalCp', 'evalMate']) expect(e4).not.toHaveProperty(key);
+    expect(clearNodeAnnotations(e4)).toBe(false);
+    expect(e4.children).toHaveLength(2);
+    expect(e5.comment).toBe('keep me');
+  });
+
+  test('clearAllAnnotations counts changed nodes including variations and keeps the moves', () => {
+    const root = parsed();
+    expect(clearAllAnnotations(root)).toBe(2);
+    expect(clearAllAnnotations(root)).toBe(0);
+    expect(treeToPgn(root)).toBe('1. e4 e5 (1... c5 2. Nf3) 2. Nf3 *');
+    expect(root.children[0].children[1].san).toBe('c5');
+  });
+
+  test.each([[1, '!'], [2, '?'], [3, '!!'], [4, '??'], [5, '!?'], [6, '?!'], [14, '⩲'], [146, 'N']])(
+    'nagSymbol(%i) is %s',
+    (code, symbol) => expect(nagSymbol(code)).toBe(symbol),
+  );
+
+  test('nagSymbol is null for a code with no symbol', () => {
+    expect(nagSymbol(0)).toBeNull();
+    expect(nagSymbol(99)).toBeNull();
+  });
+
+  test('nagKind groups good, bad and neutral codes', () => {
+    expect([1, 3, 5].map(nagKind)).toEqual(['good', 'good', 'good']);
+    expect([2, 4, 6].map(nagKind)).toEqual(['bad', 'bad', 'bad']);
+    expect([7, 14, 99].map(nagKind)).toEqual(['neutral', 'neutral', 'neutral']);
+  });
+
+  test.each([[0, '0:00'], [59, '0:59'], [3600, '1:00:00'], [3725, '1:02:05'], [-5, '0:00']])(
+    'formatGameClock(%i) is %s',
+    (sec, text) => expect(formatGameClock(sec)).toBe(text),
+  );
+
+  test('formatNodeEval formats centipawns, mate and none, preferring mate', () => {
+    const node = (extra: Partial<MoveNode>): MoveNode => ({ ...createRoot(), ...extra });
+    expect(formatNodeEval(node({ evalCp: 35 }))).toBe('+0.35');
+    expect(formatNodeEval(node({ evalCp: -120 }))).toBe('−1.20');
+    expect(formatNodeEval(node({ evalCp: 0 }))).toBe('0.00');
+    expect(formatNodeEval(node({ evalMate: 3 }))).toBe('#3');
+    expect(formatNodeEval(node({ evalMate: -2 }))).toBe('#−2');
+    expect(formatNodeEval(node({}))).toBeNull();
+    expect(formatNodeEval(node({ evalCp: 50, evalMate: 4 }))).toBe('#4');
   });
 });

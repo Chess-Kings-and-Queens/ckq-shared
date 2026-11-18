@@ -16,6 +16,13 @@ const NEW_RUNTIME_EXPORTS = [
   'treeToPgn',
   'subtreePgn',
   'addVariation',
+  'hasAnnotations',
+  'clearNodeAnnotations',
+  'clearAllAnnotations',
+  'nagSymbol',
+  'nagKind',
+  'formatGameClock',
+  'formatNodeEval',
   // types/liveboard.ts
   'QUIZ_VERDICTS',
   'QUIZ_MOVE_RESULT_STATUSES',
