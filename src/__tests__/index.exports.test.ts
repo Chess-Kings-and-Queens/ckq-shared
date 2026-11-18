@@ -114,6 +114,8 @@ const NEW_RUNTIME_EXPORTS = [
   'splitRatingFromName',
   'PGN_ISSUE_CODES',
   'PGN_ISSUE_MESSAGES',
+  // types/privateClass.ts
+  'PRIVATE_CLASS_CONTRACT_TYPE_LABELS',
 ] as const;
 
 describe('package root exports (v0.36.0)', () => {
