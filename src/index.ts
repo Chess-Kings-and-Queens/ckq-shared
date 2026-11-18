@@ -59,3 +59,5 @@ export * from './missionAppend';
 export * from './dates';
 export * from './countdown';
 export * from './onlineTournamentWindow';
+export * from './types/privateClass';
+export * from './types/billing';
