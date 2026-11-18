@@ -8,6 +8,8 @@ const NEW_RUNTIME_EXPORTS = [
   'PUZZLE_TYPES',
   'PUZZLE_TYPE_RULES',
   'puzzleTypeRules',
+  'PUZZLE_TYPE_STUDENT_NOTES',
+  'puzzleTypeStudentNote',
   'BRANCH_INTRO_HOLD_MS',
   'BRANCH_INTRO_SETTLE_MS',
   // moveTree.ts

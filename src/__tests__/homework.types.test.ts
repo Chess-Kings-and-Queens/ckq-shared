@@ -1,4 +1,4 @@
-import { HOMEWORK_CONFLICT_CODES, homeworkConflictCode, PUZZLE_TYPES, PUZZLE_TYPE_RULES, puzzleTypeRules } from '../types/homework';
+import { HOMEWORK_CONFLICT_CODES, homeworkConflictCode, PUZZLE_TYPES, PUZZLE_TYPE_RULES, PUZZLE_TYPE_STUDENT_NOTES, puzzleTypeRules, puzzleTypeStudentNote } from '../types/homework';
 import type { CreateHomeworkResultInput, HomeworkPuzzleLine, HomeworkPuzzlePayload, HomeworkRow, PositionSubmissionOutcome } from '../types/homework';
 import type { SubmitWorkbookMoveInput } from '../types/workbook';
 
@@ -116,5 +116,20 @@ describe('HomeworkRow', () => {
     // @ts-expect-error isSpecialized is required
     const bad: HomeworkRow = { ...row };
     expect(bad._id).toBe('hw-1');
+  });
+});
+
+describe('puzzleTypeStudentNote', () => {
+  test('a both-sides puzzle carries the opponent-move note', () => {
+    expect(puzzleTypeStudentNote('withOpponentMoves')).toBe("You have to find your opponent's best move as well.");
+  });
+  test('regular, withVariations, missing and unknown values have no note', () => {
+    for (const v of ['regular', 'withVariations', undefined, null, '', 'nonsense']) {
+      expect(puzzleTypeStudentNote(v)).toBeNull();
+    }
+  });
+  test('the table has a key for every puzzle type and is frozen', () => {
+    expect(Object.keys(PUZZLE_TYPE_STUDENT_NOTES)).toEqual([...PUZZLE_TYPES]);
+    expect(Object.isFrozen(PUZZLE_TYPE_STUDENT_NOTES)).toBe(true);
   });
 });
