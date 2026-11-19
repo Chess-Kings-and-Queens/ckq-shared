@@ -5,6 +5,7 @@ const NEW_RUNTIME_EXPORTS = [
   // puzzleLines.ts / types/homework.ts
   'expandOpponentVariations',
   'puzzleLineProgress',
+  'groupLinesByGame',
   'PUZZLE_TYPES',
   'PUZZLE_TYPE_RULES',
   'puzzleTypeRules',

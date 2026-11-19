@@ -65,6 +65,30 @@ export interface HomeworkPositionReport {
   /** Sum of the attempts' server-measured seconds; null when not attempted. */
   timeSpent: number | null;
   status: HomeworkPositionStatus;
+  /** The PGN game (puzzle) this line belongs to, 0-based. Absent on a stale result (D12). */
+  game?: number;
+  /** The opponent move a variation line branches after ("2... Nc6"); null for a main line. Absent on a stale result. */
+  branchMove?: string | null;
+}
+
+/** One puzzle (PGN game) of a homework with its lines' totals (backend buildPuzzleSummaries). */
+export interface HomeworkPuzzleSummary {
+  game: number;
+  /** Position indexes of this game's lines, ascending. */
+  indexes: number[];
+  lineCount: number;
+  linesAttempted: number;
+  linesCorrect: number;
+  score: number;
+  maxScore: number;
+}
+
+/** GET /homework/report `summary`: the puzzle and line counts, computed by the backend. */
+export interface HomeworkReportSummary {
+  puzzleCount: number;
+  puzzlesAttempted: number;
+  lineCount: number;
+  linesAttempted: number;
 }
 
 /** GET /homework/report (homework.service.js getReport). Both branches send every field. */
@@ -89,6 +113,11 @@ export interface HomeworkReport {
   student: string;
   /** Never empty: one entry per position (Homework.noOfGames is at least 1). */
   positions: Record<string, HomeworkPositionReport>;
+  /** One entry per puzzle with its lines; null when the result is stale (the homework changed after it started). */
+  puzzles: HomeworkPuzzleSummary[] | null;
+  summary: HomeworkReportSummary;
+  /** True when the result's positions no longer match the live PGN. */
+  changed: boolean;
 }
 
 /** behavior.service.js getStrikeStatus. */
@@ -119,6 +148,8 @@ export interface HomeworkPuzzlePayload extends HomeworkStrikeStatus {
   puzzleType: PuzzleType;
   /** One entry per `games` entry (D8). */
   lines: HomeworkPuzzleLine[];
+  /** True when the student's result no longer matches the live PGN; clients show "This homework has changed". */
+  changed: boolean;
 }
 
 /** GET /homework/:id/lesson (homework.service.js getLessonContent). pgnContent and videoUrl may be "" for a video-only or PGN-only lesson. */
@@ -212,7 +243,7 @@ export interface HomeworkOpenPositionResult extends OpenPositionResult {
 /** 409 body of homework `open`/`move` when the posted position is not the next one, or `open` just used up its last attempt (D6). */
 export interface HomeworkPositionConflictBody {
   status: "error";
-  message: "position-out-of-order" | "max_attempts_reached";
+  message: "position-out-of-order" | "max_attempts_reached" | "homework-changed";
   code: 409;
   nextPositionIndex: number | null;
 }
@@ -250,7 +281,7 @@ export interface ProgressReportResponse {
 }
 
 /** The 409 codes the homework/workbook/curriculum position routes answer with (message = code). */
-export const HOMEWORK_CONFLICT_CODES = ['position-not-open', 'version-conflict', 'max_attempts_reached', 'position-out-of-order', 'already_completed'] as const;
+export const HOMEWORK_CONFLICT_CODES = ['position-not-open', 'version-conflict', 'max_attempts_reached', 'position-out-of-order', 'already_completed', 'homework-changed'] as const;
 export type HomeworkConflictCode = (typeof HOMEWORK_CONFLICT_CODES)[number];
 /** The conflict code of a 409 response, or null for any other status or message. */
 export function homeworkConflictCode(status: number | null | undefined, message: unknown): HomeworkConflictCode | null {

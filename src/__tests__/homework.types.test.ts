@@ -48,6 +48,7 @@ describe('puzzle type contract', () => {
     isBlocked: false,
     strikesLeft: 3,
     rushThresholdSeconds: null,
+    changed: false,
   };
   test('PUZZLE_TYPES lists the three types', () => {
     expect([...PUZZLE_TYPES]).toEqual(['regular', 'withOpponentMoves', 'withVariations']);
