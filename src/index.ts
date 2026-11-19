@@ -32,6 +32,7 @@ export * from './types/curriculum';
 export * from './tokens';
 export * from './statusDisplay';
 export * from './workLogDisplay';
+export * from './weeklyReportDisplay';
 export * from './apiErrors';
 export * from './tournamentResultLabels';
 export * from './liveboardProgram';
