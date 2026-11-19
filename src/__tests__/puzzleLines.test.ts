@@ -1,4 +1,4 @@
-import { BRANCH_INTRO_HOLD_MS, BRANCH_INTRO_SETTLE_MS, expandOpponentVariations, puzzleLineProgress } from '../puzzleLines';
+import { BRANCH_INTRO_HOLD_MS, BRANCH_INTRO_SETTLE_MS, expandOpponentVariations, groupLinesByGame, puzzleLineProgress } from '../puzzleLines';
 import { QuizEvaluator } from '../quizEvaluator';
 import type { HomeworkPuzzleLine } from '../types/homework';
 
@@ -124,5 +124,24 @@ describe('puzzleLineProgress', () => {
   test('no lines, or an index past the end, is null', () => {
     expect(puzzleLineProgress([], 0)).toBeNull();
     expect(puzzleLineProgress([{ game: 0, branchMove: null, branchFen: null, branchSan: null }], 1)).toBeNull();
+  });
+});
+
+describe('groupLinesByGame', () => {
+  test('one game with three lines is one group of ascending indexes', () => {
+    const lines = expandOpponentVariations(VAR_PGN).slice(0, 3).map((l) => ({ game: 0, branchMove: l.branchMove }));
+    expect(groupLinesByGame(lines)).toEqual([{ game: 0, indexes: [0, 1, 2] }]);
+  });
+
+  test('two games keep first-seen order', () => {
+    const lines = [{ game: 1 }, { game: 1 }, { game: 0 }, { game: 1 }];
+    expect(groupLinesByGame(lines)).toEqual([
+      { game: 1, indexes: [0, 1, 3] },
+      { game: 0, indexes: [2] },
+    ]);
+  });
+
+  test('no lines is []', () => {
+    expect(groupLinesByGame([])).toEqual([]);
   });
 });

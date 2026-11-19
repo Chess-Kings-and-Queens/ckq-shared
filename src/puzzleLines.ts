@@ -85,6 +85,17 @@ export function puzzleLineProgress(lines: readonly HomeworkPuzzleLine[], index: 
   };
 }
 
+/** Groups lines by their PGN game: first-seen game order, each group's line indexes ascending. */
+export function groupLinesByGame(lines: ReadonlyArray<{ game: number }>): Array<{ game: number; indexes: number[] }> {
+  const groups = new Map<number, number[]>();
+  lines.forEach((l, i) => {
+    const existing = groups.get(l.game);
+    if (existing) existing.push(i);
+    else groups.set(l.game, [i]);
+  });
+  return Array.from(groups, ([game, indexes]) => ({ game, indexes }));
+}
+
 /** Branch-move replay (homework-puzzle-type-split-plan D6/D8): how long the branch position is shown before the opponent's alternative is played. */
 export const BRANCH_INTRO_HOLD_MS = 600;
 /** …and how long after that move lands before the student may move (covers the board's 200 ms move animation). */
