@@ -28,7 +28,7 @@ describe('Tournament results kind', () => {
     const row: ResultsListRow = {
       _id: 's1',
       name: 'Class tournament',
-      format: 'swiss',
+      format: 'tournament',
       kind: 'class',
       status: 'aborted',
       levels: [],

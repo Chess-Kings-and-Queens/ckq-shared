@@ -47,6 +47,7 @@ export * from './types/studentGames';
 export * from './types/tournamentResults';
 export * from './types/onlineTournaments';
 export * from './types/liveboard';
+export * from './types/liveboardProtocol';
 export * from './types/uscfTournaments';
 export * from './types/tablebase';
 export * from './types/trail';
