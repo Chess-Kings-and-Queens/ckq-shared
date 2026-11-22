@@ -650,6 +650,41 @@ export interface NextSession {
   forLabel: string;    // makeup only: ET "ddd, MMM D" of the class it makes up for; '' otherwise
 }
 
+/** The next session of one class row (one-class-hero-plan D3). Every label is backend-written, in ET. */
+export interface StudentClassNext {
+  kind: 'regular' | 'makeup' | 'trial' | 'private';
+  sessionId: string;
+  date: string;        // ET YYYY-MM-DD
+  startsAt: string;    // ISO
+  endsAt: string;      // ISO
+  isToday: boolean;
+  label: string;       // classDayLabel
+  timeLabel: string;   // ET "h:mm A – h:mm A ET"
+  dateLabel: string;   // ET "ddd, MMM D · h:mm A ET"
+  coachName: string;
+  locationName: string; // "Online", the location name, or "In person" (private)
+  isOnline: boolean;
+  classLink: string | null; // always null for a private session
+}
+
+/** One class the student attends, as `student.classes` lists it: soonest next session first (one-class-hero-plan D2). */
+export interface StudentClass {
+  /** group: the Subscription id (or the session id when a makeup outlives the subscription); private: the PrivateClassEnrollment id; trial: the trial session id. */
+  id: string;
+  kind: 'group' | 'private' | 'trial';
+  title: string;         // level name; "Private Class"; '' when the level is unknown
+  scheduleLabel: string; // weekly pattern, "Tuesdays & Thursdays · 5:00 PM – 6:00 PM ET"; '' for a trial
+  coachName: string;
+  locationName: string;
+  isOnline: boolean;
+  isPremium: boolean;
+  premiumType: PremiumType | null;
+  startedAt: string | null; // ISO, the group subscription's createdAt; null otherwise
+  next: StudentClassNext | null;
+  /** True on the first row when it has a next session; false on every other row. */
+  isNext: boolean;
+}
+
 /**
  * The full enriched student profile — `buildStudentProfile`'s return
  * (student.service.js ~lines 451-464), spread over the base `select`
@@ -686,6 +721,8 @@ export interface PortalStudent {
   makeupClasses: PortalMakeupClass[];
   /** The single source for what the student attends next; `nextScheduleId` and each schedule's `nextClass` are views of the same list. */
   nextSession: NextSession | null;
+  /** Every class the student attends (group, private, trial), ordered by the backend; the website heroes render it as given. */
+  classes: StudentClass[];
 }
 
 /** GET /student/details (parent portal) response envelope. */
