@@ -1,4 +1,4 @@
-import { createRoot, buildTreeFromPgn, movePieceInFen, parsePgnTree, mainLine, treeToPgn, subtreePgn, addVariation, hasAnnotations, clearNodeAnnotations, clearAllAnnotations, nagSymbol, nagKind, formatGameClock, formatNodeEval, type MoveNode } from '../moveTree';
+import { createRoot, buildTreeFromPgn, movePieceInFen, parsePgnTree, mainLine, treeToPgn, subtreePgn, addVariation, hasAnnotations, clearNodeAnnotations, clearAllAnnotations, nagSymbol, nagKind, formatGameClock, formatNodeEval, pgnPuzzleText, type MoveNode } from '../moveTree';
 import { START_FEN } from '../chessUtils';
 
 describe('createRoot', () => {
@@ -669,5 +669,65 @@ describe('annotation helpers', () => {
     expect(formatNodeEval(node({ evalMate: -2 }))).toBe('#−2');
     expect(formatNodeEval(node({}))).toBeNull();
     expect(formatNodeEval(node({ evalCp: 50, evalMate: 4 }))).toBe('#4');
+  });
+});
+
+describe('parsePgnTree — leading game comment', () => {
+  test('a game with a leading comment parses to a root with no comment key; the first move does not carry that text', () => {
+    const root = parsePgnTree('{ Find the best move } 1. e4 e5 { Well played }');
+    expect(root).not.toBeNull();
+    if (!root) return;
+    expect('comment' in root).toBe(false);
+    expect(root.children[0].comment).not.toBe('Find the best move');
+    expect(root.children[0].comment).toBeUndefined();
+  });
+});
+
+describe('pgnPuzzleText', () => {
+  const BLACK_FIRST = '[FEN "6k1/8/8/8/8/8/8/6K1 b - - 0 1"]\n[SetUp "1"]\n\n';
+
+  test('a comment before the first move and one after the last move give both strings', () => {
+    expect(pgnPuzzleText('{ What would you play? } 1. e4 e5 { Both sides fight for the centre. } *')).toEqual({
+      prompt: 'What would you play?',
+      explanation: 'Both sides fight for the centre.',
+    });
+  });
+  test('only the first comment leaves the explanation null', () => {
+    expect(pgnPuzzleText('{ What would you play? } 1. e4 e5 *')).toEqual({ prompt: 'What would you play?', explanation: null });
+  });
+  test('only the last comment leaves the prompt null', () => {
+    expect(pgnPuzzleText('1. e4 e5 { The centre. } *')).toEqual({ prompt: null, explanation: 'The centre.' });
+  });
+  test('no comment gives both null', () => {
+    expect(pgnPuzzleText('1. e4 e5 *')).toEqual({ prompt: null, explanation: null });
+  });
+  test('a comment of board marks only is not text', () => {
+    expect(pgnPuzzleText('{[%csl Ga8]} 1. e4 e5 {[%cal Ge2e4]} *')).toEqual({ prompt: null, explanation: null });
+  });
+  test('a comment with text and marks gives the text alone', () => {
+    expect(pgnPuzzleText('{ Spot the fork [%csl Ga8] } 1. e4 e5 { Fork done [%cal Ge2e4] } *')).toEqual({
+      prompt: 'Spot the fork',
+      explanation: 'Fork done',
+    });
+  });
+  test('a multi-line padded comment collapses to one line with single spaces', () => {
+    expect(pgnPuzzleText('{   First line\n   second   line  } 1. e4 e5 *')).toEqual({ prompt: 'First line second line', explanation: null });
+  });
+  test('Black to move first reads both comments', () => {
+    expect(pgnPuzzleText(`${BLACK_FIRST}{ Black to play } 1... Kg7 { Done } *`)).toEqual({ prompt: 'Black to play', explanation: 'Done' });
+  });
+  test('a comment after an earlier move and one inside a variation are not read', () => {
+    expect(pgnPuzzleText('1. e4 { early } e5 (1... c5 { in a variation } 2. Nf3) 2. Nf3 Nc6 *')).toEqual({ prompt: null, explanation: null });
+  });
+  test('a comment of spaces only is null', () => {
+    expect(pgnPuzzleText('{ } 1. e4 e5 { } *')).toEqual({ prompt: null, explanation: null });
+  });
+  test('a one-move game with both comments gives both strings', () => {
+    expect(pgnPuzzleText('{ Open with a pawn } 1. e4 { The king pawn } *')).toEqual({ prompt: 'Open with a pawn', explanation: 'The king pawn' });
+  });
+  test('an unreadable PGN, a blank string and a game with no moves give both null', () => {
+    expect(pgnPuzzleText('not a pgn at all {{{')).toEqual({ prompt: null, explanation: null });
+    expect(pgnPuzzleText('')).toEqual({ prompt: null, explanation: null });
+    expect(pgnPuzzleText('{ Only a comment } *')).toEqual({ prompt: null, explanation: null });
   });
 });

@@ -16,7 +16,10 @@ export interface PositionDraft {
 
 export type PositionValidity = { ok: true } | { ok: false; reason: string };
 
-const FILES = 'abcdefgh';
+export const BOARD_FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] as const;
+export type BoardFile = (typeof BOARD_FILES)[number];
+export const BOARD_RANKS = ['1', '2', '3', '4', '5', '6', '7', '8'] as const;
+export type BoardRank = (typeof BOARD_RANKS)[number];
 
 /** 0-based file and rank of an algebraic square ('a1' → {file:0, rank:0}); null when malformed. */
 export function squareToFileRank(square: string): { file: number; rank: number } | null {
@@ -38,7 +41,7 @@ export function placementToMap(placement: string): Map<string, string> | null {
         file += Number(ch);
       } else if (PIECE_LETTERS.includes(ch)) {
         if (file > 7) return null;
-        pieces.set(`${FILES[file]}${rank}`, ch);
+        pieces.set(`${BOARD_FILES[file]}${rank}`, ch);
         file += 1;
       } else {
         return null;
@@ -56,7 +59,7 @@ export function mapToPlacement(pieces: Map<string, string>): string {
     let row = '';
     let empty = 0;
     for (let f = 0; f < 8; f++) {
-      const letter = pieces.get(`${FILES[f]}${rank}`);
+      const letter = pieces.get(`${BOARD_FILES[f]}${rank}`);
       if (letter) {
         if (empty > 0) {
           row += String(empty);
@@ -108,7 +111,7 @@ export function enPassantCandidates(placement: string, turn: 'w' | 'b'): string[
   const pieces = placementToMap(placement);
   if (!pieces) return [];
   const result: string[] = [];
-  for (const file of FILES) {
+  for (const file of BOARD_FILES) {
     if (turn === 'w') {
       if (pieces.get(`${file}5`) === 'p' && !pieces.has(`${file}6`) && !pieces.has(`${file}7`)) {
         result.push(`${file}6`);
