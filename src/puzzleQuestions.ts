@@ -198,13 +198,16 @@ export function questionReveal(kind: QuestionKind, question: PuzzleQuestion): Qu
   };
 }
 
-/** A question as a student receives it: no key, no explanation. */
+/**
+ * A question as a student receives it: no key, no explanation. Every field is copied by name, never spread: a
+ * database document's choice carries a link to its parent question, and a spread would send the key with it.
+ */
 export function studentQuestion(question: PuzzleQuestion): HomeworkQuestion {
   return {
     id: question.id,
     prompt: question.prompt,
     fen: question.fen,
-    choices: question.choices.map((c) => ({ ...c })),
+    choices: question.choices.map((c) => ({ id: c.id, fen: c.fen, alt: c.alt })),
   };
 }
 
