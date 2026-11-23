@@ -268,6 +268,14 @@ describe('studentQuestion', () => {
     expect(q.choices).not.toBe(choiceQ.choices);
     expect(q.choices[0]).not.toBe(choiceQ.choices[0]);
   });
+  test('a choice object carrying more than its three fields does not leak the rest (a database document links to its parent question)', () => {
+    const parent = { answer: { choiceIds: ['b'] }, explanation: 'SECRET' };
+    const docLike = (c: (typeof choiceQ.choices)[number]) => Object.assign({ $__parent: parent, _doc: { ...c } }, c);
+    const q = studentQuestion({ ...choiceQ, choices: choiceQ.choices.map(docLike) });
+    expect(q.choices).toEqual(choiceQ.choices.map((c) => ({ id: c.id, fen: c.fen, alt: c.alt })));
+    expect(q.choices.every((c) => Object.keys(c).sort().join() === 'alt,fen,id')).toBe(true);
+    expect(JSON.stringify(q)).not.toContain('SECRET');
+  });
 });
 
 describe('nameMoveLabel and PIECE_NAMES', () => {
