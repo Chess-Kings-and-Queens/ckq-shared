@@ -1,4 +1,5 @@
 import type { HomeworkJudgeOutcome } from '../engineJudge';
+import type { BoardFile, BoardRank } from '../boardEditor';
 
 // ── Homework API contract ────────────────────────────────────────────────────
 //
@@ -50,6 +51,47 @@ export const PUZZLE_TYPE_STUDENT_NOTES: Readonly<Record<PuzzleType, string | nul
 export function puzzleTypeStudentNote(type: string | null | undefined): string | null {
   return (PUZZLE_TYPE_STUDENT_NOTES as Record<string, string | null>)[type ?? ''] ?? null;
 }
+
+/** What a homework Material asks for. `board`: PGN games played on a board (every material written before the field). The others hold a `questions` list. */
+export const MATERIAL_KINDS = ['board', 'choice', 'square', 'nameMove'] as const;
+export type MaterialKind = (typeof MATERIAL_KINDS)[number];
+export type QuestionKind = Exclude<MaterialKind, 'board'>;
+
+export const NAME_MOVE_PIECES = ['K', 'Q', 'R', 'N', 'B', 'P'] as const;
+export type NameMovePiece = (typeof NAME_MOVE_PIECES)[number];
+export const CHOICE_IDS = ['a', 'b', 'c', 'd'] as const;
+export type ChoiceId = (typeof CHOICE_IDS)[number];
+
+/** One picture of a `choice` question. `alt` is the text alternative ('' when none). */
+export interface QuestionChoice { id: ChoiceId; fen: string; alt: string }
+
+/** The server-only key. Exactly one list is non-empty, by kind: `choice` → choiceIds, `square` → squares, `nameMove` → sans. */
+export interface QuestionAnswerKey { choiceIds: ChoiceId[]; squares: string[]; sans: string[] }
+
+/** One stored question of a non-board Material (admin and backend shape). `fen` is null for `choice`; `choices` is [] for the others. */
+export interface PuzzleQuestion {
+  id: string;
+  prompt: string;
+  explanation: string;
+  fen: string | null;
+  choices: QuestionChoice[];
+  answer: QuestionAnswerKey;
+}
+
+/** A question as a student receives it: no key, no explanation. */
+export type HomeworkQuestion = Pick<PuzzleQuestion, 'id' | 'prompt' | 'fen' | 'choices'>;
+
+/** What a student submits for a question. */
+export type QuestionAnswer =
+  | { choiceId: ChoiceId }
+  | { square: string }
+  | { piece: NameMovePiece; file: BoardFile; rank: BoardRank };
+
+/** One accepted `nameMove` answer, derived from its SAN. */
+export interface NameMoveTarget { piece: NameMovePiece; file: BoardFile; rank: BoardRank; san: string }
+
+/** The key and explanation of a resolved position. Lists not used by the kind are []; a board position uses none. */
+export interface QuestionReveal { choiceIds: ChoiceId[]; squares: string[]; moves: NameMoveTarget[]; explanation: string }
 
 /** One entry of GET /homework/:id/puzzle `lines`, parallel to `games` (D8, D14 of the prior plan; D5 here): the 0-based PGN game the line came from; for a variation line the opponent's alternative move as a numbered label (`"5... Nf6"`), the FEN it was played from and its bare SAN (`"Nf6"`), so the client can replay it before the student's first move; all three null for a main line. */
 export interface HomeworkPuzzleLine { game: number; branchMove: string | null; branchFen: string | null; branchSan: string | null }
@@ -150,6 +192,11 @@ export interface HomeworkPuzzlePayload extends HomeworkStrikeStatus {
   lines: HomeworkPuzzleLine[];
   /** True when the student's result no longer matches the live PGN; clients show "This homework has changed". */
   changed: boolean;
+  kind: MaterialKind;
+  /** [] for a board material; for a question material `games` and `lines` are [] and `totalPositions` is the question count. */
+  questions: HomeworkQuestion[];
+  /** One entry per `games` entry: the question written in that position's PGN, or null (none written, a variation line, or the material's puzzle text is off). [] for a question material, whose prompts are in `questions`. */
+  prompts: Array<string | null>;
 }
 
 /** GET /homework/:id/lesson (homework.service.js getLessonContent). pgnContent and videoUrl may be "" for a video-only or PGN-only lesson. */
@@ -204,6 +251,10 @@ export interface SubmitHomeworkMoveResult {
   /** The engine judge's outcome for this attempt; null when no judge ran (correct by the PGN, switch off, no deviation, engine unavailable). */
   judge: HomeworkJudgeOutcome | null;
   duplicate?: true;
+  /** The server's verdict on this attempt (after the engine judge, when it ran). */
+  attemptCorrect: boolean;
+  /** Non-null for a question position that is now done, and for a board position that is now done when its material shows puzzle text and its PGN holds an explanation (the three lists are then []). */
+  reveal: QuestionReveal | null;
 }
 
 /** Body of POST /homework-result (validation/homeworkResultSchemas.js createResultSchema: null is a 400). */
@@ -213,14 +264,9 @@ export interface CreateHomeworkResultInput {
   materials: Array<{ materialId: string; /** @deprecated The server derives it from the material PGN (duplication cleanup, D8); omit. */ totalPositions?: number }>;
 }
 
-/** Body of PUT /homework-result/:id/move. The server grades `moves` and measures the time (ADR backend-024, backend-029); any other key is a 400. */
-export interface SubmitHomeworkMoveInput {
-  materialId: string;
-  positionIndex: number;
-  moves: string[];
-  /** The attempt being answered, from `open`; makes a resend idempotent (D5). */
-  attemptNumber?: number;
-}
+interface SubmitHomeworkMoveBase { materialId: string; positionIndex: number; /** The attempt being answered, from `open`; makes a resend idempotent (D5). */ attemptNumber?: number }
+/** Body of PUT /homework-result/:id/move. `moves` for a board position (and `[]` to abandon any position); `answer` for a question. Exactly one of the two; any other key is a 400. */
+export type SubmitHomeworkMoveInput = SubmitHomeworkMoveBase & ({ moves: string[]; answer?: never } | { answer: QuestionAnswer; moves?: never });
 
 /** Body of PUT /homework-result/:id/open and /workbook-result/:id/open: the server stamps the position start. */
 export interface OpenPositionInput {

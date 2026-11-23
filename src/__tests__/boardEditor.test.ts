@@ -12,6 +12,8 @@ import {
   validatePosition,
   validateStartPosition,
   squareToFileRank,
+  BOARD_FILES,
+  BOARD_RANKS,
 } from '../boardEditor';
 import * as shared from '../index';
 import { START_FEN } from '../chessUtils';
@@ -98,6 +100,14 @@ describe('enPassantCandidates', () => {
 
   test('black to move mirror', () => {
     expect(enPassantCandidates('4k3/8/8/8/4P3/8/8/4K3', 'b')).toEqual(['e3']);
+  });
+
+  test('white to move: black pawns on a5, e5 and h5 give a6, e6 and h6 in file order', () => {
+    expect(enPassantCandidates('4k3/8/8/p3p2p/8/8/8/4K3', 'w')).toEqual(['a6', 'e6', 'h6']);
+  });
+
+  test('black to move: white pawns on a4, e4 and h4 give a3, e3 and h3 in file order', () => {
+    expect(enPassantCandidates('4k3/8/8/8/P3P2P/8/8/4K3', 'b')).toEqual(['a3', 'e3', 'h3']);
   });
 });
 
@@ -285,5 +295,19 @@ describe('squareToFileRank', () => {
     expect(squareToFileRank('i9')).toBeNull();
     expect(squareToFileRank('')).toBeNull();
     expect(squareToFileRank('e44')).toBeNull();
+  });
+});
+
+describe('BOARD_FILES and BOARD_RANKS', () => {
+  test('equal their literal lists', () => {
+    expect([...BOARD_FILES]).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']);
+    expect([...BOARD_RANKS]).toEqual(['1', '2', '3', '4', '5', '6', '7', '8']);
+  });
+  test('squareToFileRank agrees with the list indexes for every square', () => {
+    for (let f = 0; f < 8; f++) {
+      for (let r = 0; r < 8; r++) {
+        expect(squareToFileRank(BOARD_FILES[f] + BOARD_RANKS[r])).toEqual({ file: f, rank: r });
+      }
+    }
   });
 });

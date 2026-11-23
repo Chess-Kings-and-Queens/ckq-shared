@@ -131,6 +131,21 @@ const NEW_RUNTIME_EXPORTS = [
   'groupAttendanceDisplay',
   'homeworkDisplay',
   'workLogSourceLabel',
+  // types/homework.ts / boardEditor.ts / puzzleQuestions.ts / moveTree.ts (question kinds)
+  'MATERIAL_KINDS',
+  'NAME_MOVE_PIECES',
+  'BOARD_FILES',
+  'BOARD_RANKS',
+  'CHOICE_IDS',
+  'PIECE_NAMES',
+  'nameMoveTargets',
+  'validateQuestions',
+  'answerMatchesKind',
+  'gradeQuestionAnswer',
+  'questionReveal',
+  'studentQuestion',
+  'nameMoveLabel',
+  'pgnPuzzleText',
 ] as const;
 
 describe('package root exports (v0.36.0)', () => {

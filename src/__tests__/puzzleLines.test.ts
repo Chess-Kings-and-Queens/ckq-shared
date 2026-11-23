@@ -1,3 +1,4 @@
+import { pgnPuzzleText } from '../moveTree';
 import { BRANCH_INTRO_HOLD_MS, BRANCH_INTRO_SETTLE_MS, expandOpponentVariations, groupLinesByGame, puzzleLineProgress } from '../puzzleLines';
 import { QuizEvaluator } from '../quizEvaluator';
 import type { HomeworkPuzzleLine } from '../types/homework';
@@ -143,5 +144,19 @@ describe('groupLinesByGame', () => {
 
   test('no lines is []', () => {
     expect(groupLinesByGame([])).toEqual([]);
+  });
+});
+
+describe('puzzle text on rebuilt lines (beginner-puzzle-kinds-plan D18)', () => {
+  const TEXT_PGN = `[FEN "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"]
+[SetUp "1"]
+
+{ Which pawn move opens the game? } 1. e4 e5 (1... c5 2. Nf3 { Sicilian ending. }) 2. Nf3 Nc6 { Main line ending. } *`;
+
+  test('the main line pgn gives the question and the main explanation; the variation line pgn gives both null', () => {
+    const lines = expandOpponentVariations(TEXT_PGN);
+    expect(lines).toHaveLength(2);
+    expect(pgnPuzzleText(lines[0].pgn)).toEqual({ prompt: 'Which pawn move opens the game?', explanation: 'Main line ending.' });
+    expect(pgnPuzzleText(lines[1].pgn)).toEqual({ prompt: null, explanation: null });
   });
 });

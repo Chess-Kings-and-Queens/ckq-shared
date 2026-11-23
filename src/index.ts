@@ -13,6 +13,7 @@ export * from './decodeJwt';
 export * from './moveTree';
 export * from './pgnCheck';
 export * from './puzzleLines';
+export * from './puzzleQuestions';
 export * from './boardEditor';
 export * from './gameOutcome';
 export * from './uciInfoParser';

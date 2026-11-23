@@ -1,5 +1,5 @@
-import { HOMEWORK_CONFLICT_CODES, homeworkConflictCode, PUZZLE_TYPES, PUZZLE_TYPE_RULES, PUZZLE_TYPE_STUDENT_NOTES, puzzleTypeRules, puzzleTypeStudentNote } from '../types/homework';
-import type { CreateHomeworkResultInput, HomeworkPuzzleLine, HomeworkPuzzlePayload, HomeworkRow, PositionSubmissionOutcome } from '../types/homework';
+import { HOMEWORK_CONFLICT_CODES, homeworkConflictCode, MATERIAL_KINDS, PUZZLE_TYPES, PUZZLE_TYPE_RULES, PUZZLE_TYPE_STUDENT_NOTES, puzzleTypeRules, puzzleTypeStudentNote } from '../types/homework';
+import type { CreateHomeworkResultInput, HomeworkPuzzleLine, HomeworkPuzzlePayload, HomeworkResultRecord, HomeworkRow, PositionSubmissionOutcome, SubmitHomeworkMoveInput, SubmitHomeworkMoveResult } from '../types/homework';
 import type { SubmitWorkbookMoveInput } from '../types/workbook';
 
 describe('homeworkConflictCode', () => {
@@ -45,6 +45,8 @@ describe('puzzle type contract', () => {
     groupClassSessionId: null,
     homeworkMaterialId: 'm1',
     engineJudge: false,
+    kind: 'board' as const,
+    questions: [],
       activeViolations: 0,
       rushViolationsToBlock: 3,
       minThinkTimePct: 20,
@@ -88,13 +90,52 @@ describe('puzzle type contract', () => {
         { game: 0, branchMove: null, branchFen: null, branchSan: null },
         { game: 1, branchMove: '1... c5', branchFen: 'f', branchSan: 'c5' },
       ],
+      prompts: [null, 'text'],
     };
     expect(payload.lines).toHaveLength(payload.games.length);
+    expect(payload.prompts).toHaveLength(payload.games.length);
   });
   test('a payload without them is rejected by the compiler', () => {
-    // @ts-expect-error puzzleType and lines are required
+    // @ts-expect-error puzzleType, lines and prompts are required
     const bad: HomeworkPuzzlePayload = { ...base };
     expect(bad.games).toHaveLength(2);
+  });
+  test('a payload missing only prompts is rejected by the compiler', () => {
+    // @ts-expect-error prompts is required
+    const bad: HomeworkPuzzlePayload = { ...base, puzzleType: 'regular', lines: [] };
+    expect(bad.kind).toBe('board');
+  });
+});
+
+describe('question kinds contract', () => {
+  const record: HomeworkResultRecord = { _id: 'r1', materialResults: [] };
+  test('MATERIAL_KINDS equals the literal list', () => {
+    expect([...MATERIAL_KINDS]).toEqual(['board', 'choice', 'square', 'nameMove']);
+  });
+  test('a SubmitHomeworkMoveInput carries moves or answer', () => {
+    const board: SubmitHomeworkMoveInput = { materialId: 'm1', positionIndex: 0, moves: ['e4'] };
+    const question: SubmitHomeworkMoveInput = { materialId: 'm1', positionIndex: 0, answer: { square: 'e4' } };
+    expect(board.moves).toEqual(['e4']);
+    expect(question.answer).toEqual({ square: 'e4' });
+  });
+  test('moves and answer together are rejected by the compiler', () => {
+    // @ts-expect-error exactly one of moves and answer
+    const bad: SubmitHomeworkMoveInput = { materialId: 'm1', positionIndex: 0, moves: ['e4'], answer: { square: 'e4' } };
+    expect(bad.positionIndex).toBe(0);
+  });
+  test('a SubmitHomeworkMoveResult carries attemptCorrect and reveal', () => {
+    const result: SubmitHomeworkMoveResult = {
+      result: record,
+      rushViolation: null,
+      positionDone: true,
+      attemptsLeft: 0,
+      nextPositionIndex: null,
+      judge: null,
+      attemptCorrect: true,
+      reveal: { choiceIds: ['a'], squares: [], moves: [], explanation: 'because' },
+    };
+    expect(result.attemptCorrect).toBe(true);
+    expect(result.reveal?.choiceIds).toEqual(['a']);
   });
 });
 

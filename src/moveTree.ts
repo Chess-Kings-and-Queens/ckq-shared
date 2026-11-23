@@ -75,7 +75,12 @@ function applyAnnotations(node: MoveNode, move: any): void { // pgn-reader's unt
  * render them inline — this structure is what it expects.
  */
 export function parsePgnTree(pgn: string): MoveNode | null {
-  if (!pgn.trim()) return createRoot();
+  return readGame(pgn)?.root ?? null;
+}
+
+/** One parse of a PGN game: its move tree and the comment before the first move ('' when none). */
+function readGame(pgn: string): { root: MoveNode; gameComment: string } | null {
+  if (!pgn.trim()) return { root: createRoot(), gameComment: '' };
   // Read a normalised copy (pgn-check-single-source-plan.md D13); a null move in the main line stays unreadable.
   const prepared = normalisePgnForReading(pgn);
   if (prepared.mainLineNull) return null;
@@ -118,7 +123,8 @@ export function parsePgnTree(pgn: string): MoveNode | null {
 
     const first = reader.getMove(0) ?? undefined;
     if (first) buildLine(root, first);
-    return root;
+    const lead = reader.getGameComment()?.comment;
+    return { root, gameComment: typeof lead === 'string' ? lead : '' };
   } catch {
     return null;
   }
@@ -138,6 +144,24 @@ export function mainLine(root: MoveNode): MoveNode[] {
     line.push(node);
   }
   return line;
+}
+
+/** The text a board puzzle's PGN carries for the student (beginner-puzzle-kinds-plan D17). */
+export interface PuzzleText { prompt: string | null; explanation: string | null }
+
+const oneLine = (text: string | undefined): string | null => (text ?? '').replace(/\s+/g, ' ').trim() || null;
+
+/**
+ * The question and explanation written in a puzzle PGN: the comment before the first move, and the comment after the
+ * last main-line move. A comment inside the line or in a variation is not read; board marks ([%cal], [%csl]) are not text.
+ * Both null for an unreadable PGN or a game with no moves.
+ */
+export function pgnPuzzleText(pgn: string): PuzzleText {
+  const game = readGame(pgn);
+  if (!game) return { prompt: null, explanation: null };
+  const line = mainLine(game.root);
+  if (line.length === 0) return { prompt: null, explanation: null };
+  return { prompt: oneLine(game.gameComment), explanation: oneLine(line[line.length - 1].comment) };
 }
 
 // ── PGN writer ─────────────────────────────────────────────────────────────────
