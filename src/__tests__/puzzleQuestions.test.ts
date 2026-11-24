@@ -1,6 +1,9 @@
 import {
   PIECE_NAMES,
+  choiceLetter,
   clickSummary,
+  clicksLabel,
+  fromToLabel,
   gradeNamingPick,
   gradeQuestionAnswer,
   isQuestionAnswer,
@@ -181,10 +184,10 @@ describe('questionReveal', () => {
 });
 
 describe('studentQuestion', () => {
-  test('carries exactly id, prompt, fen and choices', () => {
+  test('carries exactly id, prompt, fen, choices and squareCount', () => {
     const q = studentQuestion(choiceQ);
-    expect(Object.keys(q).sort()).toEqual(['choices', 'fen', 'id', 'prompt']);
-    expect(q).toEqual({ id: 'q1', prompt: choiceQ.prompt, fen: null, choices: choiceQ.choices });
+    expect(Object.keys(q).sort()).toEqual(['choices', 'fen', 'id', 'prompt', 'squareCount']);
+    expect(q).toEqual({ id: 'q1', prompt: choiceQ.prompt, fen: null, choices: choiceQ.choices, squareCount: null });
   });
   test('carries a question position and choices of exactly id, text and fen', () => {
     const withBoard: PuzzleQuestion = {
@@ -215,6 +218,25 @@ describe('studentQuestion', () => {
     expect(q.choices).toEqual(choiceQ.choices.map((c) => ({ id: c.id, text: c.text, fen: c.fen })));
     expect(q.choices.every((c) => Object.keys(c).sort().join() === 'fen,id,text')).toBe(true);
     expect(JSON.stringify(q)).not.toContain('SECRET');
+  });
+});
+
+describe('choiceLetter, fromToLabel and clicksLabel', () => {
+  test('choiceLetter upper-cases the id', () => {
+    expect(choiceLetter('b')).toBe('B');
+  });
+  test('fromToLabel reads a from-to move and drops a promotion letter', () => {
+    expect(fromToLabel('d4c6')).toBe('d4–c6');
+    expect(fromToLabel('e7e8q')).toBe('e7–e8');
+  });
+  test('fromToLabel is null for anything else', () => {
+    expect(fromToLabel('')).toBeNull();
+    expect(fromToLabel('Nf3')).toBeNull();
+  });
+  test('clicksLabel reads the counts, singular and plural', () => {
+    expect(clicksLabel({ total: 2, found: 2, wrong: 0 })).toBe('2 of 2 squares');
+    expect(clicksLabel({ total: 2, found: 1, wrong: 3 })).toBe('1 of 2 squares · 3 wrong clicks');
+    expect(clicksLabel({ total: 2, found: 1, wrong: 1 })).toBe('1 of 2 squares · 1 wrong click');
   });
 });
 

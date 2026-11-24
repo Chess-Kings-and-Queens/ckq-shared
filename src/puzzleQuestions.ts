@@ -126,6 +126,7 @@ export function questionReveal(question: PuzzleQuestion): QuestionReveal {
 /**
  * A question as a student receives it: no key, no explanation. Every field is copied by name, never spread: a
  * database document's choice carries a link to its parent question, and a spread would send the key with it.
+ * `squareCount` is null (a choice question has no squares).
  */
 export function studentQuestion(question: PuzzleQuestion): HomeworkQuestion {
   return {
@@ -133,6 +134,7 @@ export function studentQuestion(question: PuzzleQuestion): HomeworkQuestion {
     prompt: question.prompt,
     fen: question.fen,
     choices: question.choices.map((c) => ({ id: c.id, text: c.text, fen: c.fen })),
+    squareCount: null,
   };
 }
 
@@ -141,6 +143,25 @@ export function nameMoveLabel(pick: { piece: NameMovePiece; file: BoardFile; ran
   const square = `${pick.file}${pick.rank}`;
   const san = `${pick.piece === 'P' ? '' : pick.piece}${square}`;
   return `${san} · ${PIECE_NAMES[pick.piece]} to ${square}`;
+}
+
+/** One from-to move (`d4c6`, an optional promotion letter): the one pattern `fromToLabel` and `movesMatchOneMove` test. */
+const FROM_TO_MOVE = /^[a-h][1-8][a-h][1-8][qrbn]?$/;
+
+/** The letter a choice shows (A–D): its id in upper case. */
+export function choiceLetter(choiceId: string): string {
+  return choiceId.toUpperCase();
+}
+
+/** A from-to move as text: "d4c6" → "d4–c6" (a promotion letter is dropped); null when the string is not a from-to move. */
+export function fromToLabel(move: string): string | null {
+  return FROM_TO_MOVE.test(move) ? `${move.slice(0, 2)}–${move.slice(2, 4)}` : null;
+}
+
+/** A finished click puzzle in words: "2 of 2 squares", "1 of 2 squares · 3 wrong clicks", "… · 1 wrong click". */
+export function clicksLabel(clicks: ClickSummary): string {
+  const base = `${clicks.found} of ${clicks.total} squares`;
+  return clicks.wrong > 0 ? `${base} · ${clicks.wrong} wrong click${clicks.wrong === 1 ? '' : 's'}` : base;
 }
 
 // ── One-move puzzles, click puzzles and picks (beginner-puzzle-kinds-revision D2–D7) ──
@@ -177,7 +198,7 @@ export function oneMoveAnswer(pgn: string, opts: { allowIllegalPosition: boolean
 
 /** Whether `moves` is the one from-to move (`d4c6`, an optional promotion letter ignored) that `answer` asks for. */
 export function movesMatchOneMove(answer: OneMoveAnswer, moves: readonly string[]): boolean {
-  if (moves.length !== 1 || !/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(moves[0])) return false;
+  if (moves.length !== 1 || !FROM_TO_MOVE.test(moves[0])) return false;
   return moves[0].slice(0, 2) === answer.from && moves[0].slice(2, 4) === answer.to;
 }
 

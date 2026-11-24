@@ -78,8 +78,8 @@ export interface PuzzleQuestion {
   answer: QuestionAnswerKey;
 }
 
-/** A position as a student receives it when it is not played from a PGN on the client: a `choice` question (its choices, and its position or `fen: null`), or a click or illegal-position puzzle (`fen` always set, `id` is then the 0-based index, `choices` is [], `prompt` is '' when no text is shown). No key, no explanation. */
-export type HomeworkQuestion = Pick<PuzzleQuestion, 'id' | 'prompt' | 'fen' | 'choices'>;
+/** A position as a student receives it when it is not played from a PGN on the client: a `choice` question (its choices, and its position or `fen: null`), or a click or illegal-position puzzle (`fen` always set, `id` is then the 0-based index, `choices` is [], `prompt` is '' when no text is shown). `squareCount` is the number of squares a click puzzle asks for (beginner-puzzle-kinds-web D1), null for every other position. No key, no explanation. */
+export type HomeworkQuestion = Pick<PuzzleQuestion, 'id' | 'prompt' | 'fen' | 'choices'> & { squareCount: number | null };
 
 /** What a student submits for a `choice` question. */
 export type QuestionAnswer = { choiceId: ChoiceId };
@@ -123,6 +123,8 @@ export interface HomeworkPositionReport {
   game?: number;
   /** The opponent move a variation line branches after ("2... Nc6"); null for a main line. Absent on a stale result. */
   branchMove?: string | null;
+  /** A finished click-a-square position of a current report: squares to find, found, wrong clicks (backend `positionClicks`, beginner-puzzle-kinds-web D5). Absent on every other position. */
+  clicks?: ClickSummary;
 }
 
 /** One puzzle (PGN game) of a homework with its lines' totals (backend buildPuzzleSummaries). */
@@ -172,6 +174,8 @@ export interface HomeworkReport {
   summary: HomeworkReportSummary;
   /** True when the result's positions no longer match the live PGN. */
   changed: boolean;
+  /** The homework material's kind; 'board' when the homework has no material. */
+  kind: MaterialKind;
 }
 
 /** behavior.service.js getStrikeStatus. */
@@ -213,6 +217,8 @@ export interface HomeworkPuzzlePayload extends HomeworkStrikeStatus {
   nameTheMove: boolean;
   /** Positions are played on a free board and answered with one from-to move (D3). */
   allowIllegalPosition: boolean;
+  /** The material shows its PGN text: the question per position (`prompts`, or a click puzzle's `prompt`) and the explanation once a position is done (beginner-puzzle-kinds-web D6). True for every `square` material. */
+  showPuzzleText: boolean;
 }
 
 /** GET /homework/:id/lesson (homework.service.js getLessonContent). pgnContent and videoUrl may be "" for a video-only or PGN-only lesson. */
