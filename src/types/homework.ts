@@ -52,46 +52,58 @@ export function puzzleTypeStudentNote(type: string | null | undefined): string |
   return (PUZZLE_TYPE_STUDENT_NOTES as Record<string, string | null>)[type ?? ''] ?? null;
 }
 
-/** What a homework Material asks for. `board`: PGN games played on a board (every material written before the field). The others hold a `questions` list. */
-export const MATERIAL_KINDS = ['board', 'choice', 'square', 'nameMove'] as const;
+/** What a homework Material asks for. `board`: PGN games played on a board (every material written before the field). `choice`: a `questions` list. `square`: PGN positions answered by clicking the squares marked `[%csl]` (beginner-puzzle-kinds-revision D4). */
+export const MATERIAL_KINDS = ['board', 'choice', 'square'] as const;
 export type MaterialKind = (typeof MATERIAL_KINDS)[number];
-export type QuestionKind = Exclude<MaterialKind, 'board'>;
 
 export const NAME_MOVE_PIECES = ['K', 'Q', 'R', 'N', 'B', 'P'] as const;
 export type NameMovePiece = (typeof NAME_MOVE_PIECES)[number];
 export const CHOICE_IDS = ['a', 'b', 'c', 'd'] as const;
 export type ChoiceId = (typeof CHOICE_IDS)[number];
 
-/** One picture of a `choice` question. `alt` is the text alternative ('' when none). */
-export interface QuestionChoice { id: ChoiceId; fen: string; alt: string }
+/** One answer option of a `choice` question (beginner-puzzle-kinds-revision D15): its visible text ('' when none), its position (null when none), at least one of the two. */
+export interface QuestionChoice { id: ChoiceId; text: string; fen: string | null }
 
-/** The server-only key. Exactly one list is non-empty, by kind: `choice` → choiceIds, `square` → squares, `nameMove` → sans. */
-export interface QuestionAnswerKey { choiceIds: ChoiceId[]; squares: string[]; sans: string[] }
+/** The server-only key of a `choice` question. */
+export interface QuestionAnswerKey { choiceIds: ChoiceId[] }
 
-/** One stored question of a non-board Material (admin and backend shape). `fen` is null for `choice`; `choices` is [] for the others. */
+/** One stored question of a `choice` Material (admin and backend shape): a question text, an optional board position and 2–4 choices. */
 export interface PuzzleQuestion {
   id: string;
   prompt: string;
   explanation: string;
+  /** The position the question is about, or null for a text-only question. Any placement that parses, kings or not (it is shown, never played). */
   fen: string | null;
   choices: QuestionChoice[];
   answer: QuestionAnswerKey;
 }
 
-/** A question as a student receives it: no key, no explanation. */
+/** A position as a student receives it when it is not played from a PGN on the client: a `choice` question (its choices, and its position or `fen: null`), or a click or illegal-position puzzle (`fen` always set, `id` is then the 0-based index, `choices` is [], `prompt` is '' when no text is shown). No key, no explanation. */
 export type HomeworkQuestion = Pick<PuzzleQuestion, 'id' | 'prompt' | 'fen' | 'choices'>;
 
-/** What a student submits for a question. */
-export type QuestionAnswer =
-  | { choiceId: ChoiceId }
-  | { square: string }
-  | { piece: NameMovePiece; file: BoardFile; rank: BoardRank };
+/** What a student submits for a `choice` question. */
+export type QuestionAnswer = { choiceId: ChoiceId };
 
-/** One accepted `nameMove` answer, derived from its SAN. */
-export interface NameMoveTarget { piece: NameMovePiece; file: BoardFile; rank: BoardRank; san: string }
+/** The key and explanation of a done position. `choiceIds` for a question, `squares` for a click puzzle, `move` for an illegal-position puzzle; unused lists are [] and `move` is null. */
+export interface QuestionReveal { choiceIds: ChoiceId[]; squares: string[]; move: { from: string; to: string } | null; explanation: string }
 
-/** The key and explanation of a resolved position. Lists not used by the kind are []; a board position uses none. */
-export interface QuestionReveal { choiceIds: ChoiceId[]; squares: string[]; moves: NameMoveTarget[]; explanation: string }
+/** What one pick answers (beginner-puzzle-kinds-revision D6, D7): a square of a click puzzle, or one step of naming the move. */
+export const PICK_STEPS = ['square', 'piece', 'file', 'rank'] as const;
+export type PickStep = (typeof PICK_STEPS)[number];
+export type NamingStep = Exclude<PickStep, 'square'>;
+
+/** One pick as the student sends it: exactly one key (the others are `never`, as in SubmitHomeworkMoveInput). */
+export type HomeworkPick =
+  | { square: string; piece?: never; file?: never; rank?: never }
+  | { piece: NameMovePiece; square?: never; file?: never; rank?: never }
+  | { file: BoardFile; square?: never; piece?: never; rank?: never }
+  | { rank: BoardRank; square?: never; piece?: never; file?: never };
+
+/** One recorded pick and the server's verdict. */
+export interface StoredPick { step: PickStep; value: string; isCorrect: boolean }
+
+/** A finished click puzzle in numbers, computed by the server (D21): squares to find, squares found, wrong clicks. */
+export interface ClickSummary { total: number; found: number; wrong: number }
 
 /** One entry of GET /homework/:id/puzzle `lines`, parallel to `games` (D8, D14 of the prior plan; D5 here): the 0-based PGN game the line came from; for a variation line the opponent's alternative move as a numbered label (`"5... Nf6"`), the FEN it was played from and its bare SAN (`"Nf6"`), so the client can replay it before the student's first move; all three null for a main line. */
 export interface HomeworkPuzzleLine { game: number; branchMove: string | null; branchFen: string | null; branchSan: string | null }
@@ -193,10 +205,14 @@ export interface HomeworkPuzzlePayload extends HomeworkStrikeStatus {
   /** True when the student's result no longer matches the live PGN; clients show "This homework has changed". */
   changed: boolean;
   kind: MaterialKind;
-  /** [] for a board material; for a question material `games` and `lines` are [] and `totalPositions` is the question count. */
+  /** One entry per position for a `choice`, `square` or illegal-position material (then `games`, `lines` and `prompts` are []); [] for a board material played from its PGN. */
   questions: HomeworkQuestion[];
   /** One entry per `games` entry: the question written in that position's PGN, or null (none written, a variation line, or the material's puzzle text is off). [] for a question material, whose prompts are in `questions`. */
   prompts: Array<string | null>;
+  /** Name the move after each correct move (D1). */
+  nameTheMove: boolean;
+  /** Positions are played on a free board and answered with one from-to move (D3). */
+  allowIllegalPosition: boolean;
 }
 
 /** GET /homework/:id/lesson (homework.service.js getLessonContent). pgnContent and videoUrl may be "" for a video-only or PGN-only lesson. */
@@ -218,6 +234,8 @@ export interface HomeworkPositionAnswer {
   bestScore: number;
   isCorrect: boolean;
   isCompleted: boolean;
+  /** The clicks and name picks recorded on this position, in order; absent when there are none. */
+  picks?: StoredPick[];
 }
 
 export interface HomeworkMaterialResult {
@@ -253,7 +271,7 @@ export interface SubmitHomeworkMoveResult {
   duplicate?: true;
   /** The server's verdict on this attempt (after the engine judge, when it ran). */
   attemptCorrect: boolean;
-  /** Non-null for a question position that is now done, and for a board position that is now done when its material shows puzzle text and its PGN holds an explanation (the three lists are then []). */
+  /** Non-null for a done position that has something to reveal: a question's key, a click puzzle's squares, an illegal-position puzzle's move, or a board position's PGN explanation when its material shows puzzle text. */
   reveal: QuestionReveal | null;
 }
 
@@ -265,8 +283,22 @@ export interface CreateHomeworkResultInput {
 }
 
 interface SubmitHomeworkMoveBase { materialId: string; positionIndex: number; /** The attempt being answered, from `open`; makes a resend idempotent (D5). */ attemptNumber?: number }
-/** Body of PUT /homework-result/:id/move. `moves` for a board position (and `[]` to abandon any position); `answer` for a question. Exactly one of the two; any other key is a 400. */
+/** Body of PUT /homework-result/:id/move. `moves` for a board position (one from-to move such as `d4c6` on an illegal-position material, and `[]` to abandon any position); `answer` for a `choice` question. Exactly one of the two; any other key is a 400. */
 export type SubmitHomeworkMoveInput = SubmitHomeworkMoveBase & ({ moves: string[]; answer?: never } | { answer: QuestionAnswer; moves?: never });
+
+/** Body of PUT /homework-result/:id/pick. */
+export interface SubmitHomeworkPickInput { materialId: string; positionIndex: number; pick: HomeworkPick }
+
+/** PUT /homework-result/:id/pick success body. `nextStep` is what the position asks for next ('square' while squares are left, a naming step while naming), null when there is nothing left to pick. */
+export interface SubmitHomeworkPickResult {
+  result: HomeworkResultRecord;
+  pickCorrect: boolean;
+  picks: StoredPick[];
+  nextStep: PickStep | null;
+  positionDone: boolean;
+  nextPositionIndex: number | null;
+  reveal: QuestionReveal | null;
+}
 
 /** Body of PUT /homework-result/:id/open and /workbook-result/:id/open: the server stamps the position start. */
 export interface OpenPositionInput {

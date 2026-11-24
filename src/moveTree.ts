@@ -1,8 +1,8 @@
 import { PgnReader } from '@mliebelt/pgn-reader';
-import { START_FEN, withPgnTags, fenMoveContext, normalisePgnForReading, sanToMove } from './chessUtils';
+import { START_FEN, withPgnTags, fenMoveContext, normalisePgnForReading, sanToMove, parsePgnHeader } from './chessUtils';
 import { ChessGame } from './chessGame';
 import { fenFields, fenFromFields } from './fen';
-import { setPieceAt } from './boardEditor';
+import { setPieceAt, placementToMap, squareToFileRank } from './boardEditor';
 
 // ── Move tree ──────────────────────────────────────────────────────────────────
 //
@@ -78,9 +78,9 @@ export function parsePgnTree(pgn: string): MoveNode | null {
   return readGame(pgn)?.root ?? null;
 }
 
-/** One parse of a PGN game: its move tree and the comment before the first move ('' when none). */
-function readGame(pgn: string): { root: MoveNode; gameComment: string } | null {
-  if (!pgn.trim()) return { root: createRoot(), gameComment: '' };
+/** One parse of a PGN game: its move tree, the comment before the first move ('' when none) and that comment's board marks. */
+function readGame(pgn: string): { root: MoveNode; gameComment: string; marks: { squares: string[]; arrows: string[] } } | null {
+  if (!pgn.trim()) return { root: createRoot(), gameComment: '', marks: { squares: [], arrows: [] } };
   // Read a normalised copy (pgn-check-single-source-plan.md D13); a null move in the main line stays unreadable.
   const prepared = normalisePgnForReading(pgn);
   if (prepared.mainLineNull) return null;
@@ -123,8 +123,9 @@ function readGame(pgn: string): { root: MoveNode; gameComment: string } | null {
 
     const first = reader.getMove(0) ?? undefined;
     if (first) buildLine(root, first);
-    const lead = reader.getGameComment()?.comment;
-    return { root, gameComment: typeof lead === 'string' ? lead : '' };
+    const lead = reader.getGameComment();
+    const list = (value: unknown): string[] => (Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []);
+    return { root, gameComment: typeof lead?.comment === 'string' ? lead.comment : '', marks: { squares: list(lead?.colorFields), arrows: list(lead?.colorArrows) } };
   } catch {
     return null;
   }
@@ -162,6 +163,35 @@ export function pgnPuzzleText(pgn: string): PuzzleText {
   const line = mainLine(game.root);
   if (line.length === 0) return { prompt: null, explanation: null };
   return { prompt: oneLine(game.gameComment), explanation: oneLine(line[line.length - 1].comment) };
+}
+
+/** A puzzle written as a position with no moves (beginner-puzzle-kinds-revision D3, D4). */
+export interface PositionPuzzle {
+  /** The game's [FEN] tag as written: any placement, kings or not. */
+  fen: string;
+  /** The comment's text, on one line; null when there is none. */
+  prompt: string | null;
+  /** The [%csl] squares, any colour, in order, each once. */
+  squares: string[];
+  /** The [%cal] arrows, any colour, in order. */
+  arrows: Array<{ from: string; to: string }>;
+}
+
+/**
+ * Read a position-only puzzle. The FEN comes from the [FEN] tag, never from the reader, which rewrites an illegal
+ * placement. Null for an unreadable PGN, a game with moves, no [FEN] tag, or a FEN whose fields or placement do not parse.
+ */
+export function pgnPositionPuzzle(pgn: string): PositionPuzzle | null {
+  const fen = parsePgnHeader(pgn).FEN?.trim();
+  const fields = fen ? fenFields(fen) : null;
+  if (!fen || !fields || placementToMap(fields.placement) === null) return null;
+  const game = readGame(pgn);
+  if (!game || mainLine(game.root).length > 0) return null;
+  const squares = [...new Set(game.marks.squares.map((m) => m.slice(1)).filter((sq) => squareToFileRank(sq) !== null))];
+  const arrows = game.marks.arrows
+    .map((m) => ({ from: m.slice(1, 3), to: m.slice(3, 5) }))
+    .filter((a) => squareToFileRank(a.from) !== null && squareToFileRank(a.to) !== null && a.from !== a.to);
+  return { fen, prompt: oneLine(game.gameComment), squares, arrows };
 }
 
 // ── PGN writer ─────────────────────────────────────────────────────────────────
