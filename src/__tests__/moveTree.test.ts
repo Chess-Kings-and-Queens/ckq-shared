@@ -1,4 +1,4 @@
-import { createRoot, buildTreeFromPgn, movePieceInFen, parsePgnTree, mainLine, treeToPgn, subtreePgn, addVariation, hasAnnotations, clearNodeAnnotations, clearAllAnnotations, nagSymbol, nagKind, formatGameClock, formatNodeEval, pgnPuzzleText, type MoveNode } from '../moveTree';
+import { createRoot, buildTreeFromPgn, movePieceInFen, parsePgnTree, mainLine, treeToPgn, subtreePgn, addVariation, hasAnnotations, clearNodeAnnotations, clearAllAnnotations, nagSymbol, nagKind, formatGameClock, formatNodeEval, pgnPuzzleText, pgnPositionPuzzle, type MoveNode } from '../moveTree';
 import { START_FEN } from '../chessUtils';
 
 describe('createRoot', () => {
@@ -729,5 +729,73 @@ describe('pgnPuzzleText', () => {
     expect(pgnPuzzleText('not a pgn at all {{{')).toEqual({ prompt: null, explanation: null });
     expect(pgnPuzzleText('')).toEqual({ prompt: null, explanation: null });
     expect(pgnPuzzleText('{ Only a comment } *')).toEqual({ prompt: null, explanation: null });
+  });
+});
+
+describe('pgnPositionPuzzle', () => {
+  const game = (fen: string, body: string): string => `[SetUp "1"]
+[FEN "${fen}"]
+
+${body}`;
+  const NO_KINGS = '8/8/8/8/8/8/2P1P3/8 w - - 0 1';
+  const FOUR_KINGS = 'kkkk4/8/8/8/8/8/8/8 w - - 0 1';
+  const EMPTY = '8/8/8/8/8/8/8/8 w - - 0 1';
+  const PAWN_ON_8TH = '4P3/8/8/8/8/8/8/8 w - - 0 1';
+  const KNIGHT_D4 = '8/8/8/8/3N4/8/8/8 w - - 0 1';
+
+  test('no kings, text and coloured squares', () => {
+    expect(pgnPositionPuzzle(game(NO_KINGS, '{ Click squares. [%csl Gc2,Re2] } *'))).toEqual({
+      fen: NO_KINGS,
+      prompt: 'Click squares.',
+      squares: ['c2', 'e2'],
+      arrows: [],
+    });
+  });
+  test('four black kings keep the FEN as written, not the reader rewrite', () => {
+    const puzzle = pgnPositionPuzzle(game(FOUR_KINGS, '{ Count them. [%csl Ga8] } *'));
+    expect(puzzle?.fen).toBe(FOUR_KINGS);
+    expect(puzzle?.squares).toEqual(['a8']);
+  });
+  test('an empty board and a pawn on the 8th rank read as written', () => {
+    expect(pgnPositionPuzzle(game(EMPTY, '{ Nothing here. [%csl Ga1] } *'))?.fen).toBe(EMPTY);
+    expect(pgnPositionPuzzle(game(PAWN_ON_8TH, '{ A pawn. [%csl Ge8] } *'))?.fen).toBe(PAWN_ON_8TH);
+  });
+  test('one arrow', () => {
+    expect(pgnPositionPuzzle(game(KNIGHT_D4, '{ Move the knight. [%cal Gd4c6] } *'))).toEqual({
+      fen: KNIGHT_D4,
+      prompt: 'Move the knight.',
+      squares: [],
+      arrows: [{ from: 'd4', to: 'c6' }],
+    });
+  });
+  test('a repeated square counts once', () => {
+    expect(pgnPositionPuzzle(game(NO_KINGS, '{ Click. [%csl Gc2,Rc2,Ge2] } *'))?.squares).toEqual(['c2', 'e2']);
+  });
+  test('a malformed mark is dropped: a self-arrow by this reader, a whole list holding a bad square by the pgn reader', () => {
+    const arrows = pgnPositionPuzzle(game(KNIGHT_D4, '{ Click. [%csl Gc2] [%cal Gd4d4,Gd4c6] } *'));
+    expect(arrows?.squares).toEqual(['c2']);
+    expect(arrows?.arrows).toEqual([{ from: 'd4', to: 'c6' }]);
+    const badList = pgnPositionPuzzle(game(KNIGHT_D4, '{ Click. [%csl Gc2,Gz9] [%cal Gd4c6] } *'));
+    expect(badList?.squares).toEqual([]);
+    expect(badList?.arrows).toEqual([{ from: 'd4', to: 'c6' }]);
+  });
+  test('no comment gives a null prompt', () => {
+    expect(pgnPositionPuzzle(game(NO_KINGS, '*'))).toEqual({ fen: NO_KINGS, prompt: null, squares: [], arrows: [] });
+  });
+  test('a game with a move is null', () => {
+    expect(pgnPositionPuzzle(game('4k3/8/8/8/8/8/8/4K3 w - - 0 1', '{ Move. } 1. Ke2 *'))).toBeNull();
+  });
+  test('no [FEN] tag is null', () => {
+    expect(pgnPositionPuzzle('{ Click. [%csl Ga1] } *')).toBeNull();
+  });
+  test('a FEN of 7 ranks is null', () => {
+    expect(pgnPositionPuzzle(game('8/8/8/8/8/8/8 w - - 0 1', '{ Click. [%csl Ga1] } *'))).toBeNull();
+  });
+  test('an unreadable PGN is null', () => {
+    expect(pgnPositionPuzzle('not a pgn at all {{{')).toBeNull();
+    expect(pgnPositionPuzzle('')).toBeNull();
+  });
+  test('a comment of marks only gives a null prompt and its squares', () => {
+    expect(pgnPositionPuzzle(game(NO_KINGS, '{[%csl Ga1]} *'))).toEqual({ fen: NO_KINGS, prompt: null, squares: ['a1'], arrows: [] });
   });
 });

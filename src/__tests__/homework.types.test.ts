@@ -1,5 +1,5 @@
-import { HOMEWORK_CONFLICT_CODES, homeworkConflictCode, MATERIAL_KINDS, PUZZLE_TYPES, PUZZLE_TYPE_RULES, PUZZLE_TYPE_STUDENT_NOTES, puzzleTypeRules, puzzleTypeStudentNote } from '../types/homework';
-import type { CreateHomeworkResultInput, HomeworkPuzzleLine, HomeworkPuzzlePayload, HomeworkResultRecord, HomeworkRow, PositionSubmissionOutcome, SubmitHomeworkMoveInput, SubmitHomeworkMoveResult } from '../types/homework';
+import { HOMEWORK_CONFLICT_CODES, homeworkConflictCode, MATERIAL_KINDS, PICK_STEPS, PUZZLE_TYPES, PUZZLE_TYPE_RULES, PUZZLE_TYPE_STUDENT_NOTES, puzzleTypeRules, puzzleTypeStudentNote } from '../types/homework';
+import type { CreateHomeworkResultInput, HomeworkPositionAnswer, HomeworkPuzzleLine, HomeworkPuzzlePayload, HomeworkResultRecord, HomeworkRow, PositionSubmissionOutcome, SubmitHomeworkMoveInput, SubmitHomeworkMoveResult, SubmitHomeworkPickInput, SubmitHomeworkPickResult } from '../types/homework';
 import type { SubmitWorkbookMoveInput } from '../types/workbook';
 
 describe('homeworkConflictCode', () => {
@@ -47,6 +47,8 @@ describe('puzzle type contract', () => {
     engineJudge: false,
     kind: 'board' as const,
     questions: [],
+    nameTheMove: false,
+    allowIllegalPosition: false,
       activeViolations: 0,
       rushViolationsToBlock: 3,
       minThinkTimePct: 20,
@@ -105,22 +107,32 @@ describe('puzzle type contract', () => {
     const bad: HomeworkPuzzlePayload = { ...base, puzzleType: 'regular', lines: [] };
     expect(bad.kind).toBe('board');
   });
+  test('a payload carries nameTheMove and allowIllegalPosition', () => {
+    const payload: HomeworkPuzzlePayload = { ...base, puzzleType: 'regular', lines: [], prompts: [], nameTheMove: true, allowIllegalPosition: true };
+    expect(payload.nameTheMove).toBe(true);
+    expect(payload.allowIllegalPosition).toBe(true);
+  });
+  test('a payload missing nameTheMove is rejected by the compiler', () => {
+    // @ts-expect-error nameTheMove is required
+    const bad: HomeworkPuzzlePayload = { ...base, puzzleType: 'regular', lines: [], prompts: [], nameTheMove: undefined };
+    expect(bad.allowIllegalPosition).toBe(false);
+  });
 });
 
 describe('question kinds contract', () => {
   const record: HomeworkResultRecord = { _id: 'r1', materialResults: [] };
   test('MATERIAL_KINDS equals the literal list', () => {
-    expect([...MATERIAL_KINDS]).toEqual(['board', 'choice', 'square', 'nameMove']);
+    expect([...MATERIAL_KINDS]).toEqual(['board', 'choice', 'square']);
   });
   test('a SubmitHomeworkMoveInput carries moves or answer', () => {
     const board: SubmitHomeworkMoveInput = { materialId: 'm1', positionIndex: 0, moves: ['e4'] };
-    const question: SubmitHomeworkMoveInput = { materialId: 'm1', positionIndex: 0, answer: { square: 'e4' } };
+    const question: SubmitHomeworkMoveInput = { materialId: 'm1', positionIndex: 0, answer: { choiceId: 'a' } };
     expect(board.moves).toEqual(['e4']);
-    expect(question.answer).toEqual({ square: 'e4' });
+    expect(question.answer).toEqual({ choiceId: 'a' });
   });
   test('moves and answer together are rejected by the compiler', () => {
     // @ts-expect-error exactly one of moves and answer
-    const bad: SubmitHomeworkMoveInput = { materialId: 'm1', positionIndex: 0, moves: ['e4'], answer: { square: 'e4' } };
+    const bad: SubmitHomeworkMoveInput = { materialId: 'm1', positionIndex: 0, moves: ['e4'], answer: { choiceId: 'a' } };
     expect(bad.positionIndex).toBe(0);
   });
   test('a SubmitHomeworkMoveResult carries attemptCorrect and reveal', () => {
@@ -132,10 +144,51 @@ describe('question kinds contract', () => {
       nextPositionIndex: null,
       judge: null,
       attemptCorrect: true,
-      reveal: { choiceIds: ['a'], squares: [], moves: [], explanation: 'because' },
+      reveal: { choiceIds: ['a'], squares: [], move: null, explanation: 'because' },
     };
     expect(result.attemptCorrect).toBe(true);
     expect(result.reveal?.choiceIds).toEqual(['a']);
+  });
+});
+
+describe('pick contract', () => {
+  const record: HomeworkResultRecord = { _id: 'r1', materialResults: [] };
+  test('PICK_STEPS equals the literal list', () => {
+    expect([...PICK_STEPS]).toEqual(['square', 'piece', 'file', 'rank']);
+  });
+  test('a SubmitHomeworkPickInput carries each pick shape', () => {
+    const base = { materialId: 'm1', positionIndex: 0 };
+    const picks: SubmitHomeworkPickInput[] = [
+      { ...base, pick: { square: 'e4' } },
+      { ...base, pick: { piece: 'N' } },
+      { ...base, pick: { file: 'c' } },
+      { ...base, pick: { rank: '7' } },
+    ];
+    expect(picks.map((p) => Object.keys(p.pick)[0])).toEqual(['square', 'piece', 'file', 'rank']);
+  });
+  test('a pick with two keys is rejected by the compiler', () => {
+    // @ts-expect-error exactly one of square, piece, file and rank
+    const bad: SubmitHomeworkPickInput = { materialId: 'm1', positionIndex: 0, pick: { piece: 'N', file: 'c' } };
+    expect(bad.positionIndex).toBe(0);
+  });
+  test('a SubmitHomeworkPickResult carries the verdict, the picks and the next step', () => {
+    const result: SubmitHomeworkPickResult = {
+      result: record,
+      pickCorrect: true,
+      picks: [{ step: 'square', value: 'c2', isCorrect: true }],
+      nextStep: 'square',
+      positionDone: false,
+      nextPositionIndex: null,
+      reveal: null,
+    };
+    expect(result.picks[0].value).toBe('c2');
+    expect(result.nextStep).toBe('square');
+  });
+  test('a HomeworkPositionAnswer has picks optionally', () => {
+    const without: HomeworkPositionAnswer = { positionIndex: 0, attempts: [], bestScore: 0, isCorrect: false, isCompleted: false };
+    const withPicks: HomeworkPositionAnswer = { ...without, picks: [{ step: 'piece', value: 'N', isCorrect: false }] };
+    expect(without.picks).toBeUndefined();
+    expect(withPicks.picks).toHaveLength(1);
   });
 });
 
