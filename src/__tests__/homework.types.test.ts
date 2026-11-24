@@ -1,5 +1,5 @@
 import { HOMEWORK_CONFLICT_CODES, homeworkConflictCode, MATERIAL_KINDS, PICK_STEPS, PUZZLE_TYPES, PUZZLE_TYPE_RULES, PUZZLE_TYPE_STUDENT_NOTES, puzzleTypeRules, puzzleTypeStudentNote } from '../types/homework';
-import type { CreateHomeworkResultInput, HomeworkPositionAnswer, HomeworkPuzzleLine, HomeworkPuzzlePayload, HomeworkResultRecord, HomeworkRow, PositionSubmissionOutcome, SubmitHomeworkMoveInput, SubmitHomeworkMoveResult, SubmitHomeworkPickInput, SubmitHomeworkPickResult } from '../types/homework';
+import type { CreateHomeworkResultInput, HomeworkPositionAnswer, HomeworkPuzzleLine, HomeworkPuzzlePayload, HomeworkQuestion, HomeworkReport, HomeworkResultRecord, HomeworkRow, PositionSubmissionOutcome, SubmitHomeworkMoveInput, SubmitHomeworkMoveResult, SubmitHomeworkPickInput, SubmitHomeworkPickResult } from '../types/homework';
 import type { SubmitWorkbookMoveInput } from '../types/workbook';
 
 describe('homeworkConflictCode', () => {
@@ -49,6 +49,7 @@ describe('puzzle type contract', () => {
     questions: [],
     nameTheMove: false,
     allowIllegalPosition: false,
+    showPuzzleText: false,
       activeViolations: 0,
       rushViolationsToBlock: 3,
       minThinkTimePct: 20,
@@ -116,6 +117,16 @@ describe('puzzle type contract', () => {
     // @ts-expect-error nameTheMove is required
     const bad: HomeworkPuzzlePayload = { ...base, puzzleType: 'regular', lines: [], prompts: [], nameTheMove: undefined };
     expect(bad.allowIllegalPosition).toBe(false);
+  });
+  test('a payload carries showPuzzleText', () => {
+    const payload: HomeworkPuzzlePayload = { ...base, puzzleType: 'regular', lines: [], prompts: [], showPuzzleText: true };
+    expect(payload.showPuzzleText).toBe(true);
+  });
+  test('a payload without showPuzzleText is rejected by the compiler', () => {
+    const withoutText: Omit<typeof base, 'showPuzzleText'> = base;
+    // @ts-expect-error showPuzzleText is required
+    const bad: HomeworkPuzzlePayload = { ...withoutText, puzzleType: 'regular', lines: [], prompts: [] };
+    expect(bad.games).toHaveLength(2);
   });
 });
 
@@ -189,6 +200,45 @@ describe('pick contract', () => {
     const withPicks: HomeworkPositionAnswer = { ...without, picks: [{ step: 'piece', value: 'N', isCorrect: false }] };
     expect(without.picks).toBeUndefined();
     expect(withPicks.picks).toHaveLength(1);
+  });
+});
+
+describe('web contract additions (beginner-puzzle-kinds-web)', () => {
+  test('a HomeworkQuestion carries squareCount, a number or null', () => {
+    const click: HomeworkQuestion = { id: '0', prompt: 'Click the pawns.', fen: '8/8/8/8/8/8/2P1P3/8 w - - 0 1', choices: [], squareCount: 2 };
+    const choice: HomeworkQuestion = { ...click, id: 'q1', squareCount: null };
+    expect(click.squareCount).toBe(2);
+    expect(choice.squareCount).toBeNull();
+  });
+  test('a HomeworkQuestion without squareCount is rejected by the compiler', () => {
+    // @ts-expect-error squareCount is required
+    const bad: HomeworkQuestion = { id: '0', prompt: '', fen: null, choices: [] };
+    expect(bad.id).toBe('0');
+  });
+  test('a HomeworkReport needs kind and a position may carry clicks', () => {
+    const positions: HomeworkReport['positions'] = {
+      '0': { score: 1, scorePct: 100, timeSpent: 3, status: 'correct', clicks: { total: 2, found: 1, wrong: 1 } },
+    };
+    const report: HomeworkReport = {
+      homework: { noOfGames: 1, timeLimit: 0, createdAt: '2026-11-24T12:00:00Z', materialCollection: null, status: 'completed' },
+      score: 1,
+      maxScore: 1,
+      scorePct: 100,
+      timeSpent: 3,
+      lesson: null,
+      student: 's1',
+      positions,
+      puzzles: null,
+      summary: { puzzleCount: 1, puzzlesAttempted: 1, lineCount: 1, linesAttempted: 1 },
+      changed: false,
+      kind: 'square',
+    };
+    expect(report.kind).toBe('square');
+    expect(report.positions['0'].clicks?.found).toBe(1);
+    const withoutKind: Omit<HomeworkReport, 'kind'> = report;
+    // @ts-expect-error kind is required
+    const bad: HomeworkReport = withoutKind;
+    expect(bad.student).toBe('s1');
   });
 });
 
