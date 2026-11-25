@@ -158,6 +158,10 @@ const NEW_RUNTIME_EXPORTS = [
   'clickSummary',
   'pgnPositionPuzzle',
   'PICK_STEPS',
+  // liveboardMoveAck.ts
+  'classifyMoveAck',
+  'isGoneMoveAckError',
+  'MOVE_ACK_GONE_ERRORS',
 ] as const;
 
 describe('package root exports (v0.36.0)', () => {

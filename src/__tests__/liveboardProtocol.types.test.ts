@@ -5,6 +5,7 @@ import type {
   LiveboardClientToServerEvents,
   LiveboardServerToClientEvents,
   MissionMoveAck,
+  MissionMoveRefusedAck,
   ParticipantHistoryAck,
   QuizMoveResultPayload,
   QuizMoveResultStatus,
@@ -13,9 +14,12 @@ import type {
   SessionJoinAck,
   SessionSyncPayload,
   TournamentClocksWire,
+  TournamentByeMoveAck,
+  TournamentByeMoveRefusedAck,
   TournamentGameResumedPayload,
   TournamentMyGame,
 } from '../index';
+import { MOVE_ACK_GONE_ERRORS } from '../index';
 
 const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 const AFTER_E4 = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
@@ -196,5 +200,42 @@ describe('liveboard protocol narrowing', () => {
     expect(SYNC.boardGame?.path).toEqual([0]);
     expect(SYNC.tournament?.myGame?.gameId).toBe('g1');
     expect(SYNC.tournamentGames.g1.clocks).toBeNull();
+  });
+});
+
+describe('move refusal acks', () => {
+  test('every refusal code is assignable to its ack union', () => {
+    const mission: MissionMoveRefusedAck[] = [
+      { ok: false, error: 'no-active-mission' },
+      { ok: false, error: 'no-participant' },
+      { ok: false, error: 'move-index-gap' },
+    ];
+    const bye: TournamentByeMoveRefusedAck[] = [
+      { ok: false, error: 'no-active-tournament' },
+      { ok: false, error: 'no-such-game' },
+      { ok: false, error: 'not-your-game' },
+      { ok: false, error: 'move-index-gap' },
+    ];
+    const missionAcks: MissionMoveAck[] = mission;
+    const byeAcks: TournamentByeMoveAck[] = bye;
+    expect(missionAcks).toHaveLength(3);
+    expect(byeAcks).toHaveLength(4);
+  });
+
+  test('a code from the other event is not a refusal of this one', () => {
+    // @ts-expect-error not-your-game is a tournament:bye-move refusal only
+    const wrongMission: MissionMoveRefusedAck = { ok: false, error: 'not-your-game' };
+    // @ts-expect-error no-participant is a mission:move refusal only
+    const wrongBye: TournamentByeMoveRefusedAck = { ok: false, error: 'no-participant' };
+    expect([wrongMission.ok, wrongBye.ok]).toEqual([false, false]);
+  });
+
+  test('the gone list is exactly the refusal codes minus move-index-gap', () => {
+    type Equals<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false;
+    const goneListIsExact: Equals<
+      (typeof MOVE_ACK_GONE_ERRORS)[number],
+      Exclude<MissionMoveRefusedAck['error'] | TournamentByeMoveRefusedAck['error'], 'move-index-gap'>
+    > = true;
+    expect(goneListIsExact).toBe(true);
   });
 });
