@@ -943,12 +943,18 @@ export interface LiveboardMoveThrewAck {
   error: string;
 }
 
+/** mission:move refusals the server names (sessionRoom.js:3803, :3809, :3858). */
+export interface MissionMoveRefusedAck {
+  ok: false;
+  error: 'no-active-mission' | 'no-participant' | 'move-index-gap';
+}
+
 /** mission:move ack, sessionRoom.js:3726-3906. Narrow with `ok`, then `'moves' in ack` and `'clock' in ack`. */
 export type MissionMoveAck =
   | { ok: true; clock?: MissionClock }
   | { ok: true; duplicate: true }
   | { ok: true; ignored: 'coach' | 'already-finished' }
-  | { ok: false; error: 'no-active-mission' | 'no-participant' | 'move-index-gap' }
+  | MissionMoveRefusedAck
   | LiveboardMoveRestoreAck
   | LiveboardMoveFlaggedAck
   | LiveboardMoveThrewAck;
@@ -1003,12 +1009,18 @@ export interface TournamentByeMovePayload {
   clientMoveTimeMs?: number;
 }
 
+/** tournament:bye-move refusals the server names (sessionRoom.js:4721, :4727, :4731, :4749). */
+export interface TournamentByeMoveRefusedAck {
+  ok: false;
+  error: 'no-active-tournament' | 'no-such-game' | 'not-your-game' | 'move-index-gap';
+}
+
 /** tournament:bye-move ack, sessionRoom.js:4644-4759. */
 export type TournamentByeMoveAck =
   | { ok: true; clock?: MissionClock }
   | { ok: true; duplicate: true }
   | { ok: true; ignored: 'coach' | 'already-finished' }
-  | { ok: false; error: 'no-active-tournament' | 'no-such-game' | 'not-your-game' | 'move-index-gap' }
+  | TournamentByeMoveRefusedAck
   | LiveboardMoveRestoreAck
   | LiveboardMoveFlaggedAck
   | LiveboardMoveThrewAck;
