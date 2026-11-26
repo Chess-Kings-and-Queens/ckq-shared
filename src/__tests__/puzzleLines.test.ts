@@ -8,8 +8,8 @@ const VAR_PGN = `[FEN "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
 1. e4 e5 (1... c5 2. Nf3 d6 (2... Nc6 3. d4)) (1... e6 2. d4) 2. Nf3 Nc6 (2... d6 3. d4) 3. Bb5 *`;
 
-const solution = (pgn: string): string => new QuizEvaluator(pgn, 100).solutionLine;
-const startFen = (pgn: string): string => new QuizEvaluator(pgn, 100).startFen;
+const solution = (pgn: string): string => new QuizEvaluator(pgn).solutionLine;
+const startFen = (pgn: string): string => new QuizEvaluator(pgn).startFen;
 
 describe('expandOpponentVariations', () => {
   test('VAR_PGN gives the main line then four variation lines, deepest first, ties in PGN order', () => {

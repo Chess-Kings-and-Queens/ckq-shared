@@ -87,7 +87,7 @@ export interface QuizRecentAnswerGraded {
   correctAnswer: string | null;
   /** Every SAN played on the line (student moves and server-played replies). */
   moves: string[];
-  /** Always 1 on the liveboard. */
+  /** The attempt that finished the line. */
   attemptNumber: number;
   score: number;
   /** null for an exact match and for partial credit scored at quiz end. */
@@ -395,6 +395,7 @@ export interface QuizStudentLine {
   line: number;
   fen: string;
   branchMove: string | null;
+  attemptNumber: number;
 }
 
 /** session:sync, sent only to the joining socket (sessionRoom.js:3208; built at :381 buildSyncPayload). Every field is always present. */
@@ -415,6 +416,10 @@ export interface SessionSyncPayload {
   quizTimeLimit: number | null;
   /** Points per line of the running (or last) quiz. */
   quizMaxScore: number;
+  /** Attempts per line of the running quiz; 1 outside a quiz. */
+  quizMaxAttempts: number;
+  /** The requester's attempt number on the current line; 1 outside a quiz. */
+  myQuizAttemptNumber: number;
   quizStartedAt: number | null;
   /** Line 0's side; non-null only while mode is 'quiz'. Read `myQuizLine.playerColor` for the requester's current line. */
   quizPlayerColor: Side | null;
@@ -571,6 +576,8 @@ export interface QuizStartedPayload {
   timeLimit: number;
   /** Points per line. */
   maxScore: number;
+  /** Attempts per line, 1–3. */
+  maxAttempts: number;
   deadline: number;
   protocol: 2;
   engineJudge: { enabled: boolean };
@@ -607,6 +614,19 @@ export interface QuizOpponentMove {
   fen: string;
 }
 
+/** A wrong line with an attempt left (puzzle-attempts plan D1/D6): the student continues from `fen`, which is `plies` played on the line start. */
+export interface QuizMoveRetry {
+  status: 'retry';
+  verdict: QuizResultVerdict | null;
+  attemptNumber: number;
+  maxAttempts: number;
+  plies: string[];
+  fen: string;
+}
+
+/** quiz:student-retry, coach socket only. */
+export interface QuizStudentRetryPayload { userId: string; line: number; attemptNumber: number; plies: string[]; fen: string }
+
 /**
  * quiz:move-result, to the mover only: sessionRoom.js:4820-4864 (rejected, continue, checking), :960 (terminal).
  * Narrow on `status`. In 'continue', `ply` is the index of the last ply the server stored and `opponent`
@@ -614,6 +634,7 @@ export interface QuizOpponentMove {
  */
 export type QuizMoveResultPayload =
   | { status: 'rejected'; reason: 'stale-index'; expectedIndex: number }
+  | QuizMoveRetry
   | { status: 'rejected'; reason: Exclude<QuizMoveRejectReason, 'stale-index'> }
   | { status: 'continue'; ply: number; opponent: QuizOpponentMove | null }
   | { status: 'checking' }

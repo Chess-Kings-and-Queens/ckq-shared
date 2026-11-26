@@ -15,7 +15,6 @@ export type EvaluateMoveResult = {
   result: MoveResult;
   /** The opponent's reply to auto-play, when the student is correct so far and it is not their turn. */
   nextSan?: string;
-  score: number;
   /** Player moves matched before the first miss (all of them when Correct). */
   correctPlayerMoves: number;
 };
@@ -27,25 +26,20 @@ export interface QuizEvaluatorOptions {
 
 export class QuizEvaluator {
   readonly quizMoves: QuizMove[];
-  readonly maxScore: number;
   readonly playerColor: 'w' | 'b';
-  readonly scorePerMove: number;
   /** The position the quiz starts from (the PGN's [FEN] tag, else the start position). */
   readonly startFen: string;
   readonly bothSides: boolean;
 
   /** Throws `Error('Invalid quiz PGN')` when the PGN cannot be parsed; empty move text does not throw. */
-  constructor(quizPgn: string, maxScore: number, options: QuizEvaluatorOptions = {}) {
+  constructor(quizPgn: string, options: QuizEvaluatorOptions = {}) {
     const root = parsePgnTree(quizPgn);
     if (!root) throw new Error('Invalid quiz PGN');
     const line = mainLine(root);
     this.startFen = root.fen;
     this.quizMoves = line.map((n) => ({ san: n.san, fen: n.fen, turn: n.color }));
     this.playerColor = line[0]?.color ?? 'w';
-    this.maxScore = maxScore;
     this.bothSides = options.bothSides === true;
-    const noOfPlayerMoves = this.quizMoves.filter((m) => this.isPlayerPly(m.turn)).length;
-    this.scorePerMove = noOfPlayerMoves > 0 ? maxScore / noOfPlayerMoves : 0;
   }
 
   isPlayerPly(turn: 'w' | 'b'): boolean {
@@ -61,8 +55,8 @@ export class QuizEvaluator {
 
   /** Evaluate the SANs played so far (student and auto-played opponent, from index 0). */
   evaluate(sans: readonly string[]): EvaluateMoveResult {
-    if (this.quizMoves.length === 0) return { result: MoveResult.Terminated, score: 0, correctPlayerMoves: 0 };
-    if (sans.length === 0) return { result: MoveResult.Pending, score: 0, correctPlayerMoves: 0 };
+    if (this.quizMoves.length === 0) return { result: MoveResult.Terminated, correctPlayerMoves: 0 };
+    if (sans.length === 0) return { result: MoveResult.Pending, correctPlayerMoves: 0 };
     let correctPlayerMoves = 0;
     const allCorrect = sans.every((san, i) => {
       const expected = this.quizMoves[i];
@@ -70,18 +64,32 @@ export class QuizEvaluator {
       if (match && this.isPlayerPly(expected.turn)) correctPlayerMoves++;
       return match;
     });
-    if (!allCorrect) return { result: MoveResult.Incorrect, score: this.scorePerMove * correctPlayerMoves, correctPlayerMoves };
-    if (sans.length >= this.quizMoves.length) return { result: MoveResult.Correct, score: this.maxScore, correctPlayerMoves };
+    if (!allCorrect) return { result: MoveResult.Incorrect, correctPlayerMoves };
+    if (sans.length >= this.quizMoves.length) return { result: MoveResult.Correct, correctPlayerMoves };
     const next = this.quizMoves[sans.length];
-    return { result: MoveResult.Pending, nextSan: this.isPlayerPly(next.turn) ? undefined : next.san, score: 0, correctPlayerMoves };
+    return { result: MoveResult.Pending, nextSan: this.isPlayerPly(next.turn) ? undefined : next.san, correctPlayerMoves };
+  }
+
+  /** The leading plies of `sans` that match the solution, and how many of them are the student's own. */
+  matchedPrefix(sans: readonly string[]): { plies: number; playerUnits: number } {
+    let plies = 0;
+    let playerUnits = 0;
+    while (plies < sans.length && plies < this.quizMoves.length && sans[plies] === this.quizMoves[plies].san) {
+      if (this.isPlayerPly(this.quizMoves[plies].turn)) playerUnits++;
+      plies++;
+    }
+    return { plies, playerUnits };
+  }
+
+  /** Number of student plies (units) in the line. */
+  get playerUnits(): number {
+    return this.quizMoves.filter((m) => this.isPlayerPly(m.turn)).length;
   }
 }
 
 export type PositionGrade = {
   /** Server-side outcome of one attempt at one position. */
   isCorrect: boolean;
-  /** Raw 0-100 score before attempt decay (the caller applies decay). */
-  score: number;
   /** The evaluator's own result, for callers that need the detail. */
   result: MoveResult;
   /** Player moves matched before the first miss (all of them when Correct). */
@@ -94,20 +102,20 @@ export type PositionGrade = {
  * position's PGN. This is the ONE grading rule, shared by the browser's
  * instant preview and the backend's authoritative grade (ADR backend-024).
  *
- *   Correct    → { isCorrect: true,  score: 100 }
- *   Incorrect  → { isCorrect: false, score: partial (scorePerMove × correct player moves) }
+ *   Correct    → { isCorrect: true }
+ *   Incorrect  → { isCorrect: false }
  *   Pending / Terminated (no moves, an unfinished correct prefix, empty PGN)
- *              → { isCorrect: false, score: 0 }
+ *              → { isCorrect: false }
+ * Points are not part of the grade: they come from attemptScoring.ts.
  *
  * Moves after the end of the solution line are ignored.
  */
 export function gradePositionAttempt(pgn: string, sans: string[], options: QuizEvaluatorOptions = {}): PositionGrade {
-  const evaluator = new QuizEvaluator(pgn, 100, options);
+  const evaluator = new QuizEvaluator(pgn, options);
   const evaluated = evaluator.evaluate(sans.slice(0, evaluator.quizMoves.length));
   const correctPlayerMoves = evaluated.correctPlayerMoves;
-  if (evaluated.result === MoveResult.Correct) return { isCorrect: true, score: 100, result: evaluated.result, correctPlayerMoves };
-  if (evaluated.result === MoveResult.Incorrect) return { isCorrect: false, score: evaluated.score, result: evaluated.result, correctPlayerMoves };
-  return { isCorrect: false, score: 0, result: evaluated.result, correctPlayerMoves };
+  if (evaluated.result === MoveResult.Correct) return { isCorrect: true, result: evaluated.result, correctPlayerMoves };
+  return { isCorrect: false, result: evaluated.result, correctPlayerMoves };
 }
 
 export type PlyDeviation = {
@@ -130,7 +138,7 @@ export type PlyDeviation = {
  * Throws `Error('Invalid quiz PGN')` like `QuizEvaluator`.
  */
 export function firstDeviation(pgn: string, sans: readonly string[], options: QuizEvaluatorOptions = {}): PlyDeviation | null {
-  const evaluator = new QuizEvaluator(pgn, 100, options);
+  const evaluator = new QuizEvaluator(pgn, options);
   const limit = Math.min(sans.length, evaluator.quizMoves.length);
   for (let i = 0; i < limit; i++) {
     const expected = evaluator.quizMoves[i];

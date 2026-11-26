@@ -11,6 +11,7 @@ import type {
   QuizMoveResultStatus,
   QuizMoveTerminalResult,
   QuizRecentAnswer,
+  QuizStudentRetryPayload,
   SessionJoinAck,
   SessionSyncPayload,
   TournamentClocksWire,
@@ -51,7 +52,7 @@ const LINE_ONE_RESULT: QuizMoveTerminalResult = {
 const SYNC: SessionSyncPayload = {
   mode: 'tournament', status: 'active', currentFen: START, currentMaterial: null, shapes: [['e2', 'e4', 'green']],
   orientation: 'white', boardControllerId: null, boardGame: { pgn: '1. e4 *', path: [0] },
-  quizDeadline: null, quizTimeLimit: null, quizMaxScore: 10, quizStartedAt: null,
+  quizDeadline: null, quizTimeLimit: null, quizMaxScore: 10, quizMaxAttempts: 2, myQuizAttemptNumber: 2, quizStartedAt: null,
   quizPlayerColor: null, quizEngineJudge: null, quizAllOrNothing: false, myQuizPending: false, myQuizResult: null,
   quizPuzzleType: 'regular', quizLineCount: 0, quizRoundMaxScore: null, myQuizLine: null, myQuizLineResults: [LINE_ONE_RESULT],
   leaderboard: [{
@@ -159,10 +160,22 @@ describe('liveboard protocol narrowing', () => {
 
   test('a quiz move result narrows on status to the next line', () => {
     const next = (r: QuizMoveResultPayload) =>
-      r.status === 'rejected' || r.status === 'continue' || r.status === 'checking' ? null : r.nextLine?.index ?? null;
+      r.status === 'rejected' || r.status === 'continue' || r.status === 'checking' || r.status === 'retry' ? null : r.nextLine?.index ?? null;
     expect(next(LINE_ONE_RESULT)).toBe(1);
     expect(next({ status: 'continue', ply: 0, opponent: null })).toBeNull();
     expect(next({ status: 'rejected', reason: 'stale-index', expectedIndex: 2 })).toBeNull();
+  });
+
+  test('a retry result is in the quiz move result union', () => {
+    const retry: QuizMoveResultPayload = {
+      status: 'retry', verdict: null, attemptNumber: 2, maxAttempts: 2, plies: ['e4', 'e5'], fen: AFTER_E4,
+    };
+    expect(retry.status === 'retry' ? retry.plies.length : -1).toBe(2);
+  });
+
+  test('a coach retry event carries the student, line and plies', () => {
+    const payload: QuizStudentRetryPayload = { userId: 'u1', line: 0, attemptNumber: 2, plies: ['e4'], fen: AFTER_E4 };
+    expect(payload.attemptNumber).toBe(2);
   });
 
   test('a resumed game narrows to the returning player on yourColor', () => {

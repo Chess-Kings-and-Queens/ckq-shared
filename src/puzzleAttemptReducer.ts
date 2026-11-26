@@ -127,12 +127,15 @@ export interface PuzzleAttemptState {
   moves: string[];
   /** The position's full timer duration in seconds, or null if untimed. Immutable for this state's whole lifetime: a RETRY_RESET restores secondsLeft to exactly this value. */
   readonly timeLimit: number | null;
+  /** Plies the attempt started with (a server resume); 0 for a fresh start. */
+  startPly: number;
 }
 
 /**
  * Builds the initial state for a freshly mounted puzzle: the full `timeLimit` on the clock and no
- * moves. A resumed position is not seeded here: the server's `open` answer (`secondsRemaining`)
- * is the only resume source and the host applies it after mount (ADR backend-029).
+ * moves. A resumed position is not seeded here: the server's `open` answer (`secondsRemaining`,
+ * `resumeMoves`) is the only resume source and the host applies it after mount (ADR backend-029);
+ * a retry's board start is the server's `resumeMoves`, applied through `RESUME` (ADR backend-051).
  *
  * @param timeLimit Seconds per attempt, or null for untimed (workbook).
  */
@@ -142,6 +145,7 @@ export function initPuzzleAttemptState(timeLimit: number | null): PuzzleAttemptS
     secondsLeft: timeLimit,
     moves: [],
     timeLimit,
+    startPly: 0,
   };
 }
 
@@ -165,15 +169,12 @@ export type PuzzleAttemptEvent =
   | { type: 'PLAYER_MOVE'; san: string; result: 'correct'; elapsedWallClockSeconds: number }
   /** The student's move resolved the puzzle incorrectly (either the final
    *  move was wrong, or any earlier move in the sequence was wrong) — lines
-   *  241-257. `score` is the evaluator's own (opaque, time-decayed) score for
-   *  this outcome — forwarded verbatim, never computed here. No longer
-   *  carries `canRetry` — see the `TICK` doc above; the same follow-up
-   *  `RETRY_DECISION` event applies here. */
+   *  241-257. No longer carries `canRetry` — see the `TICK` doc above; the
+   *  same follow-up `RETRY_DECISION` event applies here. */
   | {
       type: 'PLAYER_MOVE';
       san: string;
       result: 'incorrect';
-      score: number;
       elapsedWallClockSeconds: number;
       /** true when the server may credit this move with the engine judge: the attempt waits in 'judging' instead of resolving incorrect. */
       awaitJudge?: boolean;
@@ -211,6 +212,8 @@ export type PuzzleAttemptEvent =
    * (lines 115-118) — this event only updates reducer state.
    */
   | { type: 'RETRY_RESET' }
+  /** The server's `open` answered with `resumeMoves`. Valid only in `playing` with no move played; otherwise a no-op. */
+  | { type: 'RESUME'; moves: readonly string[] }
   /**
    * The server's grade for an attempt in 'judging' (homework engine judge, D11). `credited` → the
    * attempt resolves correct and auto-advances after `advanceDelayMs`; not credited → it resolves
@@ -238,6 +241,9 @@ export const BRIEF_CORRECT_OVERLAY_MS = 500;
 /** How long a judged credit stays on screen before auto-advancing, in ms: long enough to read the verdict message (D17). A plain correct answer advances at 1200 ms. */
 export const JUDGED_ADVANCE_MS = 2500;
 
+/** How long the incorrect result shows before a retry resets the board, in ms. */
+export const RETRY_RESET_DELAY_MS = 1200;
+
 /**
  * Side-effect intents this reducer emits. The reducer decides what SHOULD
  * happen; a caller-supplied adapter owns the actual `setTimeout`, DB write,
@@ -246,7 +252,7 @@ export const JUDGED_ADVANCE_MS = 2500;
 export type PuzzleAttemptEffect =
   /** Fire the DB-write callback (`onRecord` in the original) immediately —
    *  the outcome is known now, independent of any visual delay. */
-  | { type: 'RECORD'; result: 'correct' | 'incorrect'; timeTaken: number; moves: string[]; score: number }
+  | { type: 'RECORD'; result: 'correct' | 'incorrect'; timeTaken: number; moves: string[] }
   /** `onPuzzleInProgressChange(false)` — always `false` in every transition
    *  this reducer emits it from (lines 166, 215); the field is kept for
    *  shape-symmetry/future-proofing rather than because `true` is ever
@@ -303,6 +309,8 @@ export function reducePuzzleAttempt(
       return handleRetryDecision(state, event);
     case 'RETRY_RESET':
       return handleRetryReset(state);
+    case 'RESUME':
+      return handleResume(state, event);
     case 'JUDGED':
       return handleJudged(state, event);
     case 'CONTINUE':
@@ -332,7 +340,7 @@ function handleTick(state: PuzzleAttemptState): PuzzleAttemptTransition {
     // event (see "The `canRetry` external input" above) — this transition
     // only records the outcome.
     const effects: PuzzleAttemptEffect[] = [
-      { type: 'RECORD', result: 'incorrect', timeTaken: state.timeLimit, moves: state.moves, score: 0 },
+      { type: 'RECORD', result: 'incorrect', timeTaken: state.timeLimit, moves: state.moves },
       { type: 'NOTIFY_IN_PROGRESS', inProgress: false }, // line 166
     ];
     return { state: { ...state, phase: 'resolved-incorrect-pending', secondsLeft: 0 }, effects };
@@ -364,7 +372,7 @@ function handlePlayerMove(
       state: { ...state, phase: 'resolved-correct', moves },
       effects: [
         { type: 'NOTIFY_IN_PROGRESS', inProgress: false }, // line 215 — fires FIRST, before any other state change
-        { type: 'RECORD', result: 'correct', timeTaken, moves, score: 100 }, // line 236 — flat 100, never decayed
+        { type: 'RECORD', result: 'correct', timeTaken, moves }, // line 236
         { type: 'SCHEDULE', kind: 'advance', delayMs: 1200 }, // lines 237-239 — unconditional
       ],
     };
@@ -377,7 +385,7 @@ function handlePlayerMove(
     const timeTaken = computeTimeTaken(state.timeLimit, state.secondsLeft, event.elapsedWallClockSeconds);
     const effects: PuzzleAttemptEffect[] = [
       { type: 'NOTIFY_IN_PROGRESS', inProgress: false }, // line 215 — same shared branch as the correct path
-      { type: 'RECORD', result: 'incorrect', timeTaken, moves, score: event.score }, // line 247 — opaque evaluator score
+      { type: 'RECORD', result: 'incorrect', timeTaken, moves }, // line 247
     ];
     return { state: { ...state, phase: event.awaitJudge ? 'judging' : 'resolved-incorrect-pending', moves }, effects };
   }
@@ -439,7 +447,7 @@ function handleRetryDecision(
   if (state.phase !== 'resolved-incorrect-pending') return { state, effects: [] };
   const phase: PuzzlePhase = event.canRetry ? 'resolved-incorrect-retry' : 'resolved-incorrect-final';
   const effects: PuzzleAttemptEffect[] = event.canRetry
-    ? [{ type: 'SCHEDULE', kind: 'retry-reset', delayMs: 1200 }]
+    ? [{ type: 'SCHEDULE', kind: 'retry-reset', delayMs: RETRY_RESET_DELAY_MS }]
     : [];
   return { state: { ...state, phase }, effects };
 }
@@ -467,7 +475,17 @@ function handleRetryReset(state: PuzzleAttemptState): PuzzleAttemptTransition {
       phase: 'playing',
       secondsLeft: state.timeLimit, // the full timeLimit
       moves: [], // line 113
+      startPly: 0,
     },
     effects: [],
   };
+}
+
+/** The server's resume point for this attempt: applied only before any move is played. */
+function handleResume(
+  state: PuzzleAttemptState,
+  event: Extract<PuzzleAttemptEvent, { type: 'RESUME' }>,
+): PuzzleAttemptTransition {
+  if (state.phase !== 'playing' || state.moves.length !== 0) return { state, effects: [] };
+  return { state: { ...state, moves: [...event.moves], startPly: event.moves.length }, effects: [] };
 }

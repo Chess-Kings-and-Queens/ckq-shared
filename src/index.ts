@@ -4,6 +4,7 @@
 
 export * from './quizEvaluator';
 export * from './engineJudge';
+export * from './attemptScoring';
 export * from './chessGame';
 export * from './boardStatus';
 export * from './chessUtils';
