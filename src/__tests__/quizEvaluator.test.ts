@@ -13,62 +13,46 @@ const ONE_MOVE_PGN = '1. e4';
 
 describe('QuizEvaluator constructor', () => {
   test('sets playerColor to white for a standard game', () => {
-    const q = new QuizEvaluator(TWO_MOVE_PGN, 100);
+    const q = new QuizEvaluator(TWO_MOVE_PGN);
     expect(q.playerColor).toBe('w');
   });
 
   test('loads quizMoves from PGN', () => {
-    const q = new QuizEvaluator(TWO_MOVE_PGN, 100);
+    const q = new QuizEvaluator(TWO_MOVE_PGN);
     expect(q.quizMoves).toHaveLength(2);
   });
 
   test('loads a single-move PGN', () => {
-    const q = new QuizEvaluator(ONE_MOVE_PGN, 100);
+    const q = new QuizEvaluator(ONE_MOVE_PGN);
     expect(q.quizMoves).toHaveLength(1);
   });
 
-  test('maxScore is stored correctly', () => {
-    const q = new QuizEvaluator(ONE_MOVE_PGN, 50);
-    expect(q.maxScore).toBe(50);
-  });
-
-  test('scorePerMove is maxScore when only one player move', () => {
-    const q = new QuizEvaluator(ONE_MOVE_PGN, 100);
-    expect(q.scorePerMove).toBe(100);
-  });
-
-  test('scorePerMove splits across multiple player moves', () => {
-    // e4 e5 Nf3 Nc6 — white makes 2 moves, score = 50 each
-    const q = new QuizEvaluator('1. e4 e5 2. Nf3 Nc6', 100);
-    expect(q.scorePerMove).toBe(50);
-  });
-
   test('throws on an unparseable PGN', () => {
-    expect(() => new QuizEvaluator('garbage not a pgn {{{', 100)).toThrow('Invalid quiz PGN');
+    expect(() => new QuizEvaluator('garbage not a pgn {{{')).toThrow('Invalid quiz PGN');
   });
 
   test('an empty PGN has no quiz moves and does not throw', () => {
-    const q = new QuizEvaluator('', 100);
+    const q = new QuizEvaluator('');
     expect(q.quizMoves).toEqual([]);
   });
 
   test('startFen is the [FEN] tag value when the PGN has one', () => {
-    const q = new QuizEvaluator(buildQuizPgn(FEN_AFTER_E4, ['e5']), 100);
+    const q = new QuizEvaluator(buildQuizPgn(FEN_AFTER_E4, ['e5']));
     expect(q.startFen).toBe(FEN_AFTER_E4);
   });
 
   test('startFen is the start position for a tagless PGN', () => {
-    const q = new QuizEvaluator('1. e4', 100);
+    const q = new QuizEvaluator('1. e4');
     expect(q.startFen).toBe(START_FEN);
   });
 
   test('solutionLine numbers a black-to-move quiz from its position', () => {
-    const q = new QuizEvaluator(buildQuizPgn(FEN_AFTER_E4, ['e5', 'Nf3']), 100);
+    const q = new QuizEvaluator(buildQuizPgn(FEN_AFTER_E4, ['e5', 'Nf3']));
     expect(q.solutionLine).toBe('1... e5 2. Nf3');
   });
 
   test('solutionLine is empty when there are no moves', () => {
-    expect(new QuizEvaluator('', 100).solutionLine).toBe('');
+    expect(new QuizEvaluator('').solutionLine).toBe('');
   });
 });
 
@@ -76,8 +60,8 @@ describe('QuizEvaluator constructor', () => {
 
 describe('QuizEvaluator.evaluate — pending state', () => {
   test('returns Pending when no moves played', () => {
-    const q = new QuizEvaluator(TWO_MOVE_PGN, 100);
-    expect(q.evaluate([])).toMatchObject({ result: MoveResult.Pending, score: 0 });
+    const q = new QuizEvaluator(TWO_MOVE_PGN);
+    expect(q.evaluate([])).toMatchObject({ result: MoveResult.Pending });
   });
 });
 
@@ -86,46 +70,43 @@ describe('QuizEvaluator.evaluate — pending state', () => {
 describe('QuizEvaluator.evaluate — terminated', () => {
   test('returns Terminated when quiz PGN has no moves (empty game)', () => {
     // PGN with no moves
-    const q = new QuizEvaluator('*', 100);
+    const q = new QuizEvaluator('*');
     const moves = ['e4'];
-    expect(q.evaluate(moves)).toMatchObject({ result: MoveResult.Terminated, score: 0 });
+    expect(q.evaluate(moves)).toMatchObject({ result: MoveResult.Terminated });
   });
 });
 
 // ─── evaluate — Correct ───────────────────────────────────────────────────────
 
 describe('QuizEvaluator.evaluate — correct', () => {
-  test('returns Correct with full score when all moves match', () => {
-    const q = new QuizEvaluator(ONE_MOVE_PGN, 100);
+  test('returns Correct when all moves match', () => {
+    const q = new QuizEvaluator(ONE_MOVE_PGN);
     const moves = ['e4'];
     const result = q.evaluate(moves);
     expect(result.result).toBe(MoveResult.Correct);
-    expect(result.score).toBe(100);
   });
 
   test('returns Correct for a 2-move PGN when both moves match', () => {
-    const q = new QuizEvaluator(TWO_MOVE_PGN, 100);
+    const q = new QuizEvaluator(TWO_MOVE_PGN);
     const moves = ['e4', 'e5'];
     const result = q.evaluate(moves);
     expect(result.result).toBe(MoveResult.Correct);
-    expect(result.score).toBe(100);
   });
 });
 
 // ─── evaluate — Incorrect ─────────────────────────────────────────────────────
 
 describe('QuizEvaluator.evaluate — incorrect', () => {
-  test('returns Incorrect with 0 score on first wrong move', () => {
-    const q = new QuizEvaluator(ONE_MOVE_PGN, 100); // expects e4
+  test('returns Incorrect on first wrong move', () => {
+    const q = new QuizEvaluator(ONE_MOVE_PGN); // expects e4
     const wrongMoves = ['d4'];       // played d4
     const result = q.evaluate(wrongMoves);
     expect(result.result).toBe(MoveResult.Incorrect);
-    expect(result.score).toBe(0);
   });
 
   test('returns Incorrect after correct first then wrong second', () => {
     const pgn = '1. e4 e5 2. Nf3 Nc6';
-    const q = new QuizEvaluator(pgn, 100);
+    const q = new QuizEvaluator(pgn);
     // Build: correct first 3 moves, wrong 4th
     const correct3 = ['e4', 'e5', 'Nf3'];
     const wrong = ['e4', 'e5', 'Nf3', 'd6'];
@@ -140,7 +121,7 @@ describe('QuizEvaluator.evaluate — pending with nextSan', () => {
   test('provides nextSan when correct but opponent still needs to play', () => {
     // 2-move PGN: white plays e4, black plays e5
     // After white plays e4 correctly, result should be Pending with nextSan = e5 (black)
-    const q = new QuizEvaluator(TWO_MOVE_PGN, 100);
+    const q = new QuizEvaluator(TWO_MOVE_PGN);
     const firstMove = ['e4'];
     const result = q.evaluate(firstMove);
     expect(result.result).toBe(MoveResult.Pending);
@@ -151,7 +132,7 @@ describe('QuizEvaluator.evaluate — pending with nextSan', () => {
   test('does not provide nextSan when the next move is the player\'s own turn', () => {
     // 3-move PGN: e4 e5 Nf3 — after e4+e5 (both correct), next is Nf3 (white = player)
     const pgn = '1. e4 e5 2. Nf3';
-    const q = new QuizEvaluator(pgn, 100);
+    const q = new QuizEvaluator(pgn);
     const twoMoves = ['e4', 'e5'];
     const result = q.evaluate(twoMoves);
     expect(result.result).toBe(MoveResult.Pending);
@@ -168,20 +149,19 @@ const FEN_AFTER_E4 = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1
 describe('buildQuizPgn → QuizEvaluator integration', () => {
   // ── White-to-move quizzes ─────────────────────────────────────────────────
 
-  test('white 1-move quiz: correct answer returns Correct + full score', () => {
+  test('white 1-move quiz: correct answer returns Correct', () => {
     const pgn = buildQuizPgn(START_FEN, ['e4']);
-    const q = new QuizEvaluator(pgn, 100);
+    const q = new QuizEvaluator(pgn);
     expect(q.playerColor).toBe('w');
     expect(q.quizMoves).toHaveLength(1);
 
     const result = q.evaluate(['e4']);
     expect(result.result).toBe(MoveResult.Correct);
-    expect(result.score).toBe(100);
   });
 
   test('white 1-move quiz: wrong answer returns Incorrect', () => {
     const pgn = buildQuizPgn(START_FEN, ['e4']);
-    const q = new QuizEvaluator(pgn, 100);
+    const q = new QuizEvaluator(pgn);
 
     const result = q.evaluate(['d4']);
     expect(result.result).toBe(MoveResult.Incorrect);
@@ -190,7 +170,7 @@ describe('buildQuizPgn → QuizEvaluator integration', () => {
   test('white 2-move quiz (e4 + black e5 response): after white e4, evaluator provides opponent e5', () => {
     // Coach records: white plays e4, black plays e5 (full answer sequence)
     const pgn = buildQuizPgn(START_FEN, ['e4', 'e5']);
-    const q = new QuizEvaluator(pgn, 100);
+    const q = new QuizEvaluator(pgn);
     expect(q.playerColor).toBe('w');
     expect(q.quizMoves).toHaveLength(2);
 
@@ -205,23 +185,22 @@ describe('buildQuizPgn → QuizEvaluator integration', () => {
 
   test('black 1-move quiz: playerColor is b', () => {
     const pgn = buildQuizPgn(FEN_AFTER_E4, ['e5']);
-    const q = new QuizEvaluator(pgn, 100);
+    const q = new QuizEvaluator(pgn);
     expect(q.playerColor).toBe('b');
     expect(q.quizMoves).toHaveLength(1);
   });
 
-  test('black 1-move quiz: correct answer returns Correct + full score', () => {
+  test('black 1-move quiz: correct answer returns Correct', () => {
     const pgn = buildQuizPgn(FEN_AFTER_E4, ['e5']);
-    const q = new QuizEvaluator(pgn, 100);
+    const q = new QuizEvaluator(pgn);
 
     const result = q.evaluate(['e5']);
     expect(result.result).toBe(MoveResult.Correct);
-    expect(result.score).toBe(100);
   });
 
   test('black 1-move quiz: wrong answer returns Incorrect', () => {
     const pgn = buildQuizPgn(FEN_AFTER_E4, ['e5']);
-    const q = new QuizEvaluator(pgn, 100);
+    const q = new QuizEvaluator(pgn);
 
     const result = q.evaluate(['c5']);
     expect(result.result).toBe(MoveResult.Incorrect);
@@ -230,7 +209,7 @@ describe('buildQuizPgn → QuizEvaluator integration', () => {
   test('black 2-move quiz (e5 + white Nf3 response): after black e5, evaluator provides opponent Nf3', () => {
     // Coach records: black plays e5, white plays Nf3 (full answer line)
     const pgn = buildQuizPgn(FEN_AFTER_E4, ['e5', 'Nf3']);
-    const q = new QuizEvaluator(pgn, 100);
+    const q = new QuizEvaluator(pgn);
     expect(q.playerColor).toBe('b');
     expect(q.quizMoves).toHaveLength(2);
 
@@ -248,34 +227,34 @@ describe('QuizEvaluator.evaluate — correctPlayerMoves', () => {
   const pgn = '1. e4 e5 2. Nf3 Nc6 3. Bb5 a6';
   const sans = ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5', 'a6'];
   test('Correct: counts every player move', () => {
-    const q = new QuizEvaluator(pgn, 100);
+    const q = new QuizEvaluator(pgn);
     expect(q.evaluate(sans).correctPlayerMoves).toBe(3);
   });
 
   test('Incorrect at player move 2: counts 1', () => {
-    const q = new QuizEvaluator(pgn, 100);
+    const q = new QuizEvaluator(pgn);
     expect(q.evaluate(['e4', 'e5', 'd4']).correctPlayerMoves).toBe(1);
   });
 
   test('Incorrect at player move 1: counts 0', () => {
-    const q = new QuizEvaluator(pgn, 100);
+    const q = new QuizEvaluator(pgn);
     expect(q.evaluate(['d4']).correctPlayerMoves).toBe(0);
   });
 
   test('Pending (correct prefix): counts matched player moves', () => {
-    const q = new QuizEvaluator(pgn, 100);
+    const q = new QuizEvaluator(pgn);
     const result = q.evaluate(['e4']);
     expect(result.result).toBe(MoveResult.Pending);
     expect(result.correctPlayerMoves).toBe(1);
   });
 
   test('Pending (no moves): 0', () => {
-    const q = new QuizEvaluator(pgn, 100);
+    const q = new QuizEvaluator(pgn);
     expect(q.evaluate([]).correctPlayerMoves).toBe(0);
   });
 
   test('Terminated (empty PGN): 0', () => {
-    const q = new QuizEvaluator('*', 100);
+    const q = new QuizEvaluator('*');
     expect(q.evaluate(['e4']).correctPlayerMoves).toBe(0);
   });
 });
@@ -296,7 +275,6 @@ describe('gradePositionAttempt', () => {
   test('single-move puzzle, correct SAN', () => {
     expect(gradePositionAttempt(ONE_MOVE_PGN, ['e4'])).toMatchObject({
       isCorrect: true,
-      score: 100,
       result: MoveResult.Correct,
     });
   });
@@ -304,7 +282,6 @@ describe('gradePositionAttempt', () => {
   test('single-move puzzle, wrong SAN', () => {
     expect(gradePositionAttempt(ONE_MOVE_PGN, ['d4'])).toMatchObject({
       isCorrect: false,
-      score: 0,
       result: MoveResult.Incorrect,
     });
   });
@@ -312,7 +289,6 @@ describe('gradePositionAttempt', () => {
   test('variation: main line is correct, the variation move is Incorrect', () => {
     expect(gradePositionAttempt(VARIATION_PGN, ['Qxf7#'])).toMatchObject({
       isCorrect: true,
-      score: 100,
       result: MoveResult.Correct,
     });
     expect(gradePositionAttempt(VARIATION_PGN, ['Bxf7+'])).toMatchObject({
@@ -325,51 +301,45 @@ describe('gradePositionAttempt', () => {
     const pgn = '1. e4 e5 (1... c5 Z0) 2. Nf3 Nc6 *';
     expect(gradePositionAttempt(pgn, ['e4', 'e5', 'Nf3', 'Nc6'])).toMatchObject({
       isCorrect: true,
-      score: 100,
       result: MoveResult.Correct,
     });
   });
 
-  test('three-player-move line: all correct is 100', () => {
+  test('three-player-move line: all correct', () => {
     const g = gradePositionAttempt(THREE_MOVE_PGN, THREE_MOVE_SANS);
     expect(g.isCorrect).toBe(true);
-    expect(g.score).toBe(100);
     expect(g.correctPlayerMoves).toBe(3);
   });
 
-  test('three-player-move line: wrong at player move 2 gives partial credit', () => {
+  test('three-player-move line: wrong at player move 2 is Incorrect with one player move matched', () => {
     const g = gradePositionAttempt(THREE_MOVE_PGN, ['e4', 'e5', 'd4']);
     expect(g.isCorrect).toBe(false);
     expect(g.result).toBe(MoveResult.Incorrect);
-    expect(g.score).toBeCloseTo(33.33, 1);
     expect(g.correctPlayerMoves).toBe(1);
   });
 
-  test('three-player-move line: wrong at player move 1 scores 0', () => {
+  test('three-player-move line: wrong at player move 1 matches no player move', () => {
     const g = gradePositionAttempt(THREE_MOVE_PGN, ['d4']);
     expect(g.isCorrect).toBe(false);
-    expect(g.score).toBe(0);
     expect(g.correctPlayerMoves).toBe(0);
   });
 
-  test('correct prefix only (timeout) is Pending, 0, one player move matched', () => {
+  test('correct prefix only (timeout) is Pending, one player move matched', () => {
     const g = gradePositionAttempt(THREE_MOVE_PGN, ['e4', 'e5']);
-    expect(g).toMatchObject({ isCorrect: false, score: 0, result: MoveResult.Pending, correctPlayerMoves: 1 });
+    expect(g).toMatchObject({ isCorrect: false, result: MoveResult.Pending, correctPlayerMoves: 1 });
   });
 
-  test('no moves is Pending, 0, zero player moves', () => {
+  test('no moves is Pending, zero player moves', () => {
     expect(gradePositionAttempt(THREE_MOVE_PGN, [])).toMatchObject({
       isCorrect: false,
-      score: 0,
       result: MoveResult.Pending,
       correctPlayerMoves: 0,
     });
   });
 
-  test('empty-movetext PGN is Terminated, 0, zero player moves', () => {
+  test('empty-movetext PGN is Terminated, zero player moves', () => {
     expect(gradePositionAttempt('*', ['e4'])).toMatchObject({
       isCorrect: false,
-      score: 0,
       result: MoveResult.Terminated,
       correctPlayerMoves: 0,
     });
@@ -389,7 +359,7 @@ describe('gradePositionAttempt', () => {
       [VARIATION_PGN, ['Bxf7+']],
     ];
     test.each(cases)('pgn %#', (pgn, sans) => {
-      const q = new QuizEvaluator(pgn, 100);
+      const q = new QuizEvaluator(pgn);
       let last = q.evaluate([]);
       const played: string[] = [];
       for (let i = 0; i < sans.length; i++) {
@@ -399,7 +369,6 @@ describe('gradePositionAttempt', () => {
       }
       const g = gradePositionAttempt(pgn, sans);
       expect(g.result).toBe(last.result);
-      expect(g.score).toBe(last.result === MoveResult.Correct || last.result === MoveResult.Incorrect ? last.score : 0);
       expect(g.correctPlayerMoves).toBe(last.correctPlayerMoves);
     });
   });
@@ -501,45 +470,37 @@ describe('bothSides', () => {
   const PGN = '1. e4 e5 2. Nf3';
   const both = { bothSides: true };
 
-  test('scorePerMove spreads over all plies', () => {
-    expect(new QuizEvaluator(PGN, 100, both).scorePerMove).toBeCloseTo(100 / 3);
-    expect(new QuizEvaluator(PGN, 100).scorePerMove).toBe(50);
-  });
-
   test('playerColor is still the first mover', () => {
-    expect(new QuizEvaluator(PGN, 100, both).playerColor).toBe('w');
+    expect(new QuizEvaluator(PGN, both).playerColor).toBe('w');
   });
 
   test('a correct prefix is Pending with no nextSan (nothing is auto-played)', () => {
-    const q = new QuizEvaluator(PGN, 100, both);
+    const q = new QuizEvaluator(PGN, both);
     const res = q.evaluate(['e4']);
     expect(res.result).toBe(MoveResult.Pending);
     expect(res.nextSan).toBeUndefined();
-    expect(new QuizEvaluator(PGN, 100).evaluate(['e4']).nextSan).toBe('e5');
+    expect(new QuizEvaluator(PGN).evaluate(['e4']).nextSan).toBe('e5');
   });
 
-  test('the full line is Correct 100', () => {
-    const res = new QuizEvaluator(PGN, 100, both).evaluate(['e4', 'e5', 'Nf3']);
+  test('the full line is Correct', () => {
+    const res = new QuizEvaluator(PGN, both).evaluate(['e4', 'e5', 'Nf3']);
     expect(res.result).toBe(MoveResult.Correct);
-    expect(res.score).toBe(100);
   });
 
   test('a wrong opponent-side ply is Incorrect with credit for the plies before it', () => {
-    const res = new QuizEvaluator(PGN, 100, both).evaluate(['e4', 'd5']);
+    const res = new QuizEvaluator(PGN, both).evaluate(['e4', 'd5']);
     expect(res.result).toBe(MoveResult.Incorrect);
     expect(res.correctPlayerMoves).toBe(1);
-    expect(res.score).toBeCloseTo(33.3, 1);
   });
 
   test('gradePositionAttempt with bothSides matches the stepping evaluator', () => {
-    const q = new QuizEvaluator(PGN, 100, both);
+    const q = new QuizEvaluator(PGN, both);
     for (const sans of [['e4'], ['e4', 'e5'], ['e4', 'd5'], ['d4'], ['e4', 'e5', 'Nf3']]) {
       const graded = gradePositionAttempt(PGN, sans, both);
       const stepped = q.evaluate(sans);
       expect(graded.result).toBe(stepped.result);
       expect(graded.correctPlayerMoves).toBe(stepped.correctPlayerMoves);
     }
-    expect(gradePositionAttempt(PGN, ['e4', 'd5'], both).score).toBeCloseTo(33.3, 1);
   });
 
   test('firstDeviation reports an opponent-ply miss only under bothSides', () => {
@@ -556,5 +517,38 @@ describe('bothSides', () => {
   test('firstDeviation on a player ply is side player in both modes', () => {
     expect(firstDeviation(PGN, ['d4'])?.side).toBe('player');
     expect(firstDeviation(PGN, ['d4'], both)?.side).toBe('player');
+  });
+});
+
+// ─── matchedPrefix and playerUnits (puzzle-attempts plan 5.1.1) ──────────────
+
+describe('matchedPrefix and playerUnits', () => {
+  const LINE_R = '1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. c3 Nf6 5. d4 *';
+  const LINE_B = '1. e4 e5 2. Nf3 Nc6 3. Bc4 *';
+  const FULL = ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'Bc5', 'c3', 'Nf6', 'd4'];
+
+  test('a full match covers all 9 plies and 5 units', () => {
+    expect(new QuizEvaluator(LINE_R).matchedPrefix(FULL)).toEqual({ plies: 9, playerUnits: 5 });
+  });
+
+  test('a miss at ply 0 matches nothing', () => {
+    expect(new QuizEvaluator(LINE_R).matchedPrefix(['d4', 'e5'])).toEqual({ plies: 0, playerUnits: 0 });
+  });
+
+  test('a miss at ply 6 keeps the 6 plies and 3 units before it', () => {
+    expect(new QuizEvaluator(LINE_R).matchedPrefix(['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'Bc5', 'Qh5'])).toEqual({ plies: 6, playerUnits: 3 });
+  });
+
+  test('an over-long list stops at the end of the solution', () => {
+    expect(new QuizEvaluator(LINE_R).matchedPrefix([...FULL, 'a6', 'a5'])).toEqual({ plies: 9, playerUnits: 5 });
+  });
+
+  test('both sides counts every ply as a unit', () => {
+    expect(new QuizEvaluator(LINE_B, { bothSides: true }).matchedPrefix(['e4', 'e5', 'Nf3', 'd6'])).toEqual({ plies: 3, playerUnits: 3 });
+  });
+
+  test('playerUnits is 5 for a regular line and 5 for the both-sides line', () => {
+    expect(new QuizEvaluator(LINE_R).playerUnits).toBe(5);
+    expect(new QuizEvaluator(LINE_B, { bothSides: true }).playerUnits).toBe(5);
   });
 });

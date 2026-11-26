@@ -44,6 +44,7 @@ interface WorkbookAttempt {
 interface WorkbookAnswer {
   positionIndex: number;
   attempts: WorkbookAttempt[];
+  /** The position's earned points, 0–100: the sum of its attempts' scores (ADR backend-051). */
   bestScore: number;
   isCorrect: boolean;
   isCompleted: boolean;

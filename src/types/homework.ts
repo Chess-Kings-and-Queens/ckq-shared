@@ -236,7 +236,7 @@ export interface HomeworkAnswerAttempt {
 export interface HomeworkPositionAnswer {
   positionIndex: number;
   attempts: HomeworkAnswerAttempt[];
-  /** Best attempt's score as 0-100. */
+  /** The position's earned points, 0–100: the sum of its attempts' scores (ADR backend-051). */
   bestScore: number;
   isCorrect: boolean;
   isCompleted: boolean;
@@ -316,13 +316,14 @@ export interface OpenPositionInput {
 export interface OpenPositionResult {
   timeLimit: number;
   secondsRemaining: number;
-}
-
-/** Homework `open` response: the clock plus the server's attempt for this position (D8). Workbook `open` returns only OpenPositionResult. */
-export interface HomeworkOpenPositionResult extends OpenPositionResult {
   attemptNumber: number;
   attemptsAllowed: number;
+  /** SANs the attempt starts from (the server's resume point); [] for a fresh start. */
+  resumeMoves: string[];
 }
+
+/** Homework, workbook and curriculum `open` all return OpenPositionResult. */
+export type HomeworkOpenPositionResult = OpenPositionResult;
 
 /** 409 body of homework `open`/`move` when the posted position is not the next one, or `open` just used up its last attempt (D6). */
 export interface HomeworkPositionConflictBody {
@@ -372,5 +373,5 @@ export function homeworkConflictCode(status: number | null | undefined, message:
   if (status !== 409 || typeof message !== 'string') return null;
   return (HOMEWORK_CONFLICT_CODES as readonly string[]).includes(message) ? (message as HomeworkConflictCode) : null;
 }
-/** Optional keys the workbook/curriculum move responses carry beside the result document (backend D9). */
-export interface PositionSubmissionOutcome { positionDone?: boolean; attemptsLeft?: number; nextPositionIndex?: number | null }
+/** Keys the workbook/curriculum move responses carry beside the result document (backend D9); the backend always sends all three. */
+export interface PositionSubmissionOutcome { positionDone: boolean; attemptsLeft: number; nextPositionIndex: number | null }

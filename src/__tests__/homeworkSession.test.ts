@@ -2,6 +2,7 @@ import {
   formatThinkSeconds,
   shouldShowExitWarning,
   computeTimeTaken,
+  positionAdvance,
 } from '../homeworkSession';
 
 describe('formatThinkSeconds', () => {
@@ -66,5 +67,23 @@ describe('computeTimeTaken', () => {
 
   test('answered instantly (secondsLeftAtDone equals the limit) yields 0 time taken', () => {
     expect(computeTimeTaken(180, 180, 999)).toBe(0);
+  });
+});
+
+describe('positionAdvance', () => {
+  test('not done and the browser preview wrong: retry', () => {
+    expect(positionAdvance({ positionDone: false, nextPositionIndex: 2 }, false)).toEqual({ kind: 'retry' });
+  });
+
+  test('not done but the browser preview was correct: move to the server index', () => {
+    expect(positionAdvance({ positionDone: false, nextPositionIndex: 2 }, true)).toEqual({ kind: 'move', to: 2 });
+  });
+
+  test('done: move to nextPositionIndex', () => {
+    expect(positionAdvance({ positionDone: true, nextPositionIndex: 3 }, false)).toEqual({ kind: 'move', to: 3 });
+  });
+
+  test('done with a null next index: move to null', () => {
+    expect(positionAdvance({ positionDone: true, nextPositionIndex: null }, false)).toEqual({ kind: 'move', to: null });
   });
 });

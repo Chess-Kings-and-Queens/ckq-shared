@@ -9,13 +9,9 @@
 // `docs/modules/homework.md` for the underlying business rules.
 // Since v0.28.0 the strike arithmetic (strikes left, threshold seconds) is backend-sent (ADR frontend-010); this file keeps client timing and dialog rules only.
 //
-// IMPORTANT: none of these functions compute or apply attempt-based score
-// decay (100%/50%/25% for attempt 1/2/3 — see homework.md's "Attempt system"
-// and "Score calculation" sections). That decay is applied **server-side
-// only** (Hard Rule #8 — backend is the source of truth for scoring/business
-// logic). The client always sends a flat `score: 100` for a correct answer,
-// or the quiz evaluator's own time-based score for an incorrect one; this
-// file must never diverge from that.
+// IMPORTANT: none of these functions compute points. Points come only from
+// `attemptScoring.ts`, run by the backend and the liveboard server (Hard Rule #8,
+// ADR backend-051). The client sends the moves it played and nothing else.
 
 /**
  * Formats a whole number of seconds for the rush-strike notice: under a minute "N sec", otherwise "M min" with no
@@ -41,6 +37,14 @@ export function formatThinkSeconds(secs: number): string {
  */
 export function shouldShowExitWarning(puzzleInProgress: boolean, attemptsUsedOnCurrentPuzzle: number): boolean {
   return puzzleInProgress || attemptsUsedOnCurrentPuzzle > 0;
+}
+
+export type PositionAdvance = { kind: 'retry' } | { kind: 'move'; to: number | null };
+
+/** What the board does after a saved answer: the server decides (positionDone, nextPositionIndex). A browser-correct answer the server left open moves to the server's index (a remount of the same position). */
+export function positionAdvance(outcome: { positionDone: boolean; nextPositionIndex: number | null }, previewCorrect: boolean): PositionAdvance {
+  if (!outcome.positionDone && !previewCorrect) return { kind: 'retry' };
+  return { kind: 'move', to: outcome.nextPositionIndex };
 }
 
 /**

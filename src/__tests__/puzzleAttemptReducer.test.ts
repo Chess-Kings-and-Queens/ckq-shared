@@ -4,6 +4,7 @@ import {
   PuzzleAttemptState,
   BRIEF_CORRECT_OVERLAY_MS,
   JUDGED_ADVANCE_MS,
+  RETRY_RESET_DELAY_MS,
 } from '../puzzleAttemptReducer';
 
 // Helper: build a "playing, mid-timer" state directly, without going through
@@ -15,6 +16,7 @@ function playingState(overrides: Partial<PuzzleAttemptState> = {}): PuzzleAttemp
     secondsLeft: 180,
     moves: [],
     timeLimit: 180,
+    startPly: 0,
     ...overrides,
   };
 }
@@ -26,6 +28,7 @@ describe('initPuzzleAttemptState', () => {
       secondsLeft: 180,
       moves: [],
       timeLimit: 180,
+      startPly: 0,
     });
   });
 
@@ -35,6 +38,7 @@ describe('initPuzzleAttemptState', () => {
       secondsLeft: null,
       moves: [],
       timeLimit: null,
+      startPly: 0,
     });
   });
 });
@@ -81,7 +85,7 @@ describe('item 1 — countdown tick', () => {
       expect(next.secondsLeft).toBe(0);
 
       expect(effects).toEqual([
-        { type: 'RECORD', result: 'incorrect', timeTaken: 180, moves: ['e4', 'e5'], score: 0 },
+        { type: 'RECORD', result: 'incorrect', timeTaken: 180, moves: ['e4', 'e5'] },
         { type: 'NOTIFY_IN_PROGRESS', inProgress: false },
       ]);
       expect(effects.some((e) => e.type === 'SCHEDULE')).toBe(false);
@@ -112,7 +116,7 @@ describe('item 1 — countdown tick', () => {
 // ── Item 2: player move, sequence-final and correct ──────────────────────────
 
 describe('item 2 — player move: sequence-final and correct', () => {
-  test('resolves to resolved-correct, records score 100, schedules advance after 1200ms', () => {
+  test('resolves to resolved-correct, records, schedules advance after 1200ms', () => {
     const state = playingState({ secondsLeft: 130, moves: ['e4', 'e5'] });
     const { state: next, effects } = reducePuzzleAttempt(state, {
       type: 'PLAYER_MOVE',
@@ -127,7 +131,7 @@ describe('item 2 — player move: sequence-final and correct', () => {
     // computeTimeTaken(180, 130, 999) = 180 - 130 = 50
     expect(effects).toEqual([
       { type: 'NOTIFY_IN_PROGRESS', inProgress: false },
-      { type: 'RECORD', result: 'correct', timeTaken: 50, moves: ['e4', 'e5', 'Qh5'], score: 100 },
+      { type: 'RECORD', result: 'correct', timeTaken: 50, moves: ['e4', 'e5', 'Qh5'] },
       { type: 'SCHEDULE', kind: 'advance', delayMs: 1200 },
     ]);
   });
@@ -141,18 +145,6 @@ describe('item 2 — player move: sequence-final and correct', () => {
       elapsedWallClockSeconds: 0,
     });
     expect(effects[0]).toEqual({ type: 'NOTIFY_IN_PROGRESS', inProgress: false });
-  });
-
-  test('score is always a flat 100 regardless of how much time was left', () => {
-    const state = playingState({ secondsLeft: 179 });
-    const { effects } = reducePuzzleAttempt(state, {
-      type: 'PLAYER_MOVE',
-      san: 'Qh5',
-      result: 'correct',
-      elapsedWallClockSeconds: 0,
-    });
-    const record = effects.find((e) => e.type === 'RECORD');
-    expect(record).toMatchObject({ score: 100 });
   });
 
   test('untimed puzzle: timeTaken falls back to the caller-supplied elapsed wall-clock seconds', () => {
@@ -177,7 +169,6 @@ describe('item 3 — player move: sequence-final and incorrect', () => {
       type: 'PLAYER_MOVE',
       san: 'Nf6',
       result: 'incorrect',
-      score: 37,
       elapsedWallClockSeconds: 0,
     });
 
@@ -186,22 +177,9 @@ describe('item 3 — player move: sequence-final and incorrect', () => {
     // computeTimeTaken(180, 100, 0) = 80
     expect(effects).toEqual([
       { type: 'NOTIFY_IN_PROGRESS', inProgress: false },
-      { type: 'RECORD', result: 'incorrect', timeTaken: 80, moves: ['e4', 'Nf6'], score: 37 },
+      { type: 'RECORD', result: 'incorrect', timeTaken: 80, moves: ['e4', 'Nf6'] },
     ]);
     expect(effects.some((e) => e.type === 'SCHEDULE')).toBe(false);
-  });
-
-  test('the RECORD score is forwarded verbatim from the event — the reducer never recomputes it', () => {
-    const state = playingState();
-    const { effects } = reducePuzzleAttempt(state, {
-      type: 'PLAYER_MOVE',
-      san: 'Nf6',
-      result: 'incorrect',
-      score: 12.5,
-      elapsedWallClockSeconds: 0,
-    });
-    const record = effects.find((e) => e.type === 'RECORD');
-    expect(record).toMatchObject({ score: 12.5 });
   });
 });
 
@@ -249,7 +227,7 @@ describe('RETRY_DECISION', () => {
 
       expect(final.phase).toBe('resolved-incorrect-retry');
       expect([...tickEffects, ...decisionEffects]).toEqual([
-        { type: 'RECORD', result: 'incorrect', timeTaken: 180, moves: ['e4', 'e5'], score: 0 },
+        { type: 'RECORD', result: 'incorrect', timeTaken: 180, moves: ['e4', 'e5'] },
         { type: 'NOTIFY_IN_PROGRESS', inProgress: false },
         { type: 'SCHEDULE', kind: 'retry-reset', delayMs: 1200 },
       ]);
@@ -266,7 +244,7 @@ describe('RETRY_DECISION', () => {
 
       expect(final.phase).toBe('resolved-incorrect-final');
       expect([...tickEffects, ...decisionEffects]).toEqual([
-        { type: 'RECORD', result: 'incorrect', timeTaken: 180, moves: ['e4'], score: 0 },
+        { type: 'RECORD', result: 'incorrect', timeTaken: 180, moves: ['e4'] },
         { type: 'NOTIFY_IN_PROGRESS', inProgress: false },
       ]);
     });
@@ -277,7 +255,6 @@ describe('RETRY_DECISION', () => {
         type: 'PLAYER_MOVE',
         san: 'Nf6',
         result: 'incorrect',
-        score: 37,
         elapsedWallClockSeconds: 0,
       });
       expect(afterMove.phase).toBe('resolved-incorrect-pending');
@@ -291,7 +268,7 @@ describe('RETRY_DECISION', () => {
       expect(final.moves).toEqual(['e4', 'Nf6']);
       expect([...moveEffects, ...decisionEffects]).toEqual([
         { type: 'NOTIFY_IN_PROGRESS', inProgress: false },
-        { type: 'RECORD', result: 'incorrect', timeTaken: 80, moves: ['e4', 'Nf6'], score: 37 },
+        { type: 'RECORD', result: 'incorrect', timeTaken: 80, moves: ['e4', 'Nf6'] },
         { type: 'SCHEDULE', kind: 'retry-reset', delayMs: 1200 },
       ]);
     });
@@ -302,7 +279,6 @@ describe('RETRY_DECISION', () => {
         type: 'PLAYER_MOVE',
         san: 'Nf6',
         result: 'incorrect',
-        score: 37,
         elapsedWallClockSeconds: 0,
       });
 
@@ -314,7 +290,7 @@ describe('RETRY_DECISION', () => {
       expect(final.phase).toBe('resolved-incorrect-final');
       expect([...moveEffects, ...decisionEffects]).toEqual([
         { type: 'NOTIFY_IN_PROGRESS', inProgress: false },
-        { type: 'RECORD', result: 'incorrect', timeTaken: 80, moves: ['e4', 'Nf6'], score: 37 },
+        { type: 'RECORD', result: 'incorrect', timeTaken: 80, moves: ['e4', 'Nf6'] },
       ]);
     });
   });
@@ -339,7 +315,6 @@ describe('timeout-vs-computeTimeTaken timeTaken asymmetry', () => {
       type: 'PLAYER_MOVE',
       san: 'Nf6',
       result: 'incorrect',
-      score: 0,
       elapsedWallClockSeconds: 0,
     });
     const moveRecord = moveEffects.find((e) => e.type === 'RECORD');
@@ -532,6 +507,7 @@ describe('item 6 — retry reset', () => {
       secondsLeft: 0,
       moves: ['e4', 'e5', 'Nf3'],
       timeLimit: 180,
+      startPly: 3,
     };
     const { state: next, effects } = reducePuzzleAttempt(state, { type: 'RETRY_RESET' });
 
@@ -540,6 +516,7 @@ describe('item 6 — retry reset', () => {
       secondsLeft: 180,
       moves: [],
       timeLimit: 180,
+      startPly: 0,
     });
     expect(effects).toEqual([]);
   });
@@ -576,6 +553,7 @@ describe('item 6 — retry reset', () => {
       secondsLeft: null,
       moves: ['e4'],
       timeLimit: null,
+      startPly: 0,
     };
     const { state: next } = reducePuzzleAttempt(state, { type: 'RETRY_RESET' });
     expect(next.secondsLeft).toBeNull();
@@ -601,7 +579,7 @@ it('BRIEF_CORRECT_OVERLAY_MS is 500 ms', () => {
 // ── Homework engine judge: 'judging' phase and JUDGED event ──────────────────
 
 describe('PLAYER_MOVE incorrect with awaitJudge', () => {
-  const incorrect = { type: 'PLAYER_MOVE', san: 'd4', result: 'incorrect', score: 0, elapsedWallClockSeconds: 7 } as const;
+  const incorrect = { type: 'PLAYER_MOVE', san: 'd4', result: 'incorrect', elapsedWallClockSeconds: 7 } as const;
 
   test('enters judging with the same RECORD and NOTIFY_IN_PROGRESS effects', () => {
     const state = playingState({ secondsLeft: 100 });
@@ -704,4 +682,48 @@ describe('JUDGED', () => {
 
 it('JUDGED_ADVANCE_MS is 2500 ms', () => {
   expect(JUDGED_ADVANCE_MS).toBe(2500);
+});
+
+// ── RESUME — the server's resume point (ADR backend-051) ─────────────────────
+
+describe('RESUME', () => {
+  const resume = ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'Bc5'];
+
+  test('in playing with no moves it sets moves and startPly', () => {
+    const { state: next, effects } = reducePuzzleAttempt(playingState(), { type: 'RESUME', moves: resume });
+    expect(next.moves).toEqual(resume);
+    expect(next.startPly).toBe(6);
+    expect(next.phase).toBe('playing');
+    expect(effects).toEqual([]);
+  });
+
+  test('after a move was played it is a no-op', () => {
+    const state = playingState({ moves: ['e4'] });
+    const { state: next, effects } = reducePuzzleAttempt(state, { type: 'RESUME', moves: resume });
+    expect(next).toEqual(state);
+    expect(effects).toEqual([]);
+  });
+
+  test('in judging it is a no-op', () => {
+    const state = playingState({ phase: 'judging' });
+    const { state: next, effects } = reducePuzzleAttempt(state, { type: 'RESUME', moves: resume });
+    expect(next).toEqual(state);
+    expect(effects).toEqual([]);
+  });
+
+  test('a retry reset after a resume zeroes startPly and the moves', () => {
+    const resumed = reducePuzzleAttempt(playingState(), { type: 'RESUME', moves: resume }).state;
+    const retrying: PuzzleAttemptState = { ...resumed, phase: 'resolved-incorrect-retry' };
+    const { state: next } = reducePuzzleAttempt(retrying, { type: 'RETRY_RESET' });
+    expect(next.startPly).toBe(0);
+    expect(next.moves).toEqual([]);
+  });
+});
+
+describe('RETRY_RESET_DELAY_MS', () => {
+  test('is 1200 ms and is what a retry decision schedules', () => {
+    expect(RETRY_RESET_DELAY_MS).toBe(1200);
+    const { effects } = reducePuzzleAttempt(playingState({ phase: 'resolved-incorrect-pending' }), { type: 'RETRY_DECISION', canRetry: true });
+    expect(effects).toEqual([{ type: 'SCHEDULE', kind: 'retry-reset', delayMs: 1200 }]);
+  });
 });

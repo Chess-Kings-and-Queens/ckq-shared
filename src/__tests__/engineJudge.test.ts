@@ -2,9 +2,7 @@ import {
   JUDGE_VERDICTS,
   CREDITED_VERDICTS,
   isCreditedVerdict,
-  judgedScore,
   JUDGE_VERDICT_MESSAGES,
-  ACCEPTABLE_CREDIT,
 } from '../engineJudge';
 
 describe('JUDGE_VERDICTS / CREDITED_VERDICTS', () => {
@@ -24,26 +22,6 @@ describe('isCreditedVerdict', () => {
 
   test.each(['wrong', 'illegal', 'foo', '', null, undefined])('%p is not credited', (verdict) => {
     expect(isCreditedVerdict(verdict)).toBe(false);
-  });
-});
-
-describe('judgedScore', () => {
-  test.each(['exact', 'better', 'equivalent'])('%s scores 100 whatever the partial credit', (verdict) => {
-    expect(judgedScore(verdict, 0)).toBe(100);
-    expect(judgedScore(verdict, 67)).toBe(100);
-  });
-
-  test('acceptable scores ACCEPTABLE_CREDIT (50) when the partial credit is lower', () => {
-    expect(ACCEPTABLE_CREDIT).toBe(50);
-    expect(judgedScore('acceptable', 0)).toBe(50);
-  });
-
-  test('acceptable never scores below the strict partial credit', () => {
-    expect(judgedScore('acceptable', 67)).toBe(67);
-  });
-
-  test.each(['wrong', 'illegal', 'foo', null, undefined])('%p is not credited, so the score is null', (verdict) => {
-    expect(judgedScore(verdict, 40)).toBeNull();
   });
 });
 

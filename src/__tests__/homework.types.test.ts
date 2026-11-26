@@ -1,5 +1,5 @@
 import { HOMEWORK_CONFLICT_CODES, homeworkConflictCode, MATERIAL_KINDS, PICK_STEPS, PUZZLE_TYPES, PUZZLE_TYPE_RULES, PUZZLE_TYPE_STUDENT_NOTES, puzzleTypeRules, puzzleTypeStudentNote } from '../types/homework';
-import type { CreateHomeworkResultInput, HomeworkPositionAnswer, HomeworkPuzzleLine, HomeworkPuzzlePayload, HomeworkQuestion, HomeworkReport, HomeworkResultRecord, HomeworkRow, PositionSubmissionOutcome, SubmitHomeworkMoveInput, SubmitHomeworkMoveResult, SubmitHomeworkPickInput, SubmitHomeworkPickResult } from '../types/homework';
+import type { CreateHomeworkResultInput, HomeworkPositionAnswer, HomeworkPuzzleLine, HomeworkPuzzlePayload, HomeworkQuestion, HomeworkReport, HomeworkResultRecord, HomeworkRow, OpenPositionResult, PositionSubmissionOutcome, SubmitHomeworkMoveInput, SubmitHomeworkMoveResult, SubmitHomeworkPickInput, SubmitHomeworkPickResult } from '../types/homework';
 import type { SubmitWorkbookMoveInput } from '../types/workbook';
 
 describe('homeworkConflictCode', () => {
@@ -26,11 +26,16 @@ describe('contract types', () => {
     const input: SubmitWorkbookMoveInput = { materialId: 'm1', positionIndex: 0, moves: ['e4'], attemptNumber: 2 };
     expect(input.attemptNumber).toBe(2);
   });
-  test('PositionSubmissionOutcome keys are all optional', () => {
+  test('PositionSubmissionOutcome keys are all required', () => {
+    // @ts-expect-error the backend always sends all three keys
     const empty: PositionSubmissionOutcome = {};
     const full: PositionSubmissionOutcome = { positionDone: true, attemptsLeft: 1, nextPositionIndex: null };
     expect(empty.positionDone).toBeUndefined();
     expect(full.nextPositionIndex).toBeNull();
+  });
+  test('OpenPositionResult carries the attempt and the resume moves', () => {
+    const open: OpenPositionResult = { timeLimit: 60, secondsRemaining: 41.2, attemptNumber: 2, attemptsAllowed: 3, resumeMoves: ['e4', 'e5'] };
+    expect(open.resumeMoves).toEqual(['e4', 'e5']);
   });
 });
 

@@ -86,12 +86,23 @@ const NEW_RUNTIME_EXPORTS = [
   'CREDITED_VERDICTS',
   'isCreditedVerdict',
   'JUDGE_VERDICT_MESSAGES',
-  'ACCEPTABLE_CREDIT',
-  'judgedScore',
+  // attemptScoring.ts
+  'ATTEMPT_PERCENT_SLOTS',
+  'DEFAULT_ATTEMPT_SCORING',
+  'attemptScoringError',
+  'resolveAttemptScoring',
+  'attemptPercent',
+  'creditOfVerdict',
+  'scoreLineAttempts',
+  'scoreAnswerAttempts',
+  'pointsOf',
   // quizEvaluator.ts
   'firstDeviation',
   // puzzleAttemptReducer.ts
   'JUDGED_ADVANCE_MS',
+  'RETRY_RESET_DELAY_MS',
+  // homeworkSession.ts
+  'positionAdvance',
   // noticeBody.ts
   'parseNoticeBody',
   'parseNoticeInline',
