@@ -5,6 +5,8 @@
 // (getWorkbookSummary, getWorkbookContent), backend/src/services/workbookResult.service.js
 // (createResult, submitMove), and backend/src/models/shared/positionResultSchemas.js.
 
+import type { PickOutcomeFields, PositionAnswerBody, PositionSubmissionOutcome, PuzzlePlayContent, QuestionReveal, StoredPick, SubmitHomeworkPickInput } from './homework';
+
 export interface WorkbookChapterSummary {
   title: string;
   totalPositions: number;
@@ -48,14 +50,16 @@ interface WorkbookAnswer {
   bestScore: number;
   isCorrect: boolean;
   isCompleted: boolean;
+  /** Clicks and name picks, in order; absent when there are none. */
+  picks?: StoredPick[];
 }
 
-export interface WorkbookContentChapter {
+export interface WorkbookContentChapter extends PuzzlePlayContent {
   title: string;
   materialId: string;
-  games: string[];
-  totalPositions: number;
   positionsCompleted: number;
+  /** The first unfinished position, computed by the server (positionOrder.nextPositionIndex); null when the chapter is done or has no positions. */
+  nextPositionIndex: number | null;
   answers: WorkbookAnswer[];
 }
 
@@ -68,10 +72,29 @@ export interface WorkbookContent {
   chapters: WorkbookContentChapter[];
 }
 
-export interface SubmitWorkbookMoveInput {
+/** Body of a board-only move (PUT /curriculum-result/:id/move): moves only. */
+export interface SubmitBoardMoveInput {
   materialId: string;
   positionIndex: number;
   moves: string[];
   /** The attempt being answered, from `open`; makes a resend idempotent (D5). */
   attemptNumber?: number;
+}
+
+/** Body of PUT /workbook-result/:id/move: `moves` (board) or `answer` (choice), exactly one. */
+export type SubmitWorkbookMoveInput = Omit<SubmitBoardMoveInput, 'moves'> & PositionAnswerBody;
+
+/** PUT /workbook-result/:id/move success data: the result document plus the position outcome, the verdict and the reveal. */
+export interface WorkbookMoveResult extends PositionSubmissionOutcome {
+  _id: string;
+  attemptCorrect: boolean;
+  reveal: QuestionReveal | null;
+}
+
+/** Body of PUT /workbook-result/:id/pick (the homework pick body). */
+export type SubmitWorkbookPickInput = SubmitHomeworkPickInput;
+
+/** PUT /workbook-result/:id/pick success data. */
+export interface SubmitWorkbookPickResult extends PickOutcomeFields {
+  result: { _id: string };
 }
