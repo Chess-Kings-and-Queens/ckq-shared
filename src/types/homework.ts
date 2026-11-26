@@ -190,11 +190,28 @@ export interface HomeworkStrikeStatus {
   rushThresholdSeconds: number | null;
 }
 
-/** GET /homework/:id/puzzle (homework.service.js getPuzzleContent); one success branch. */
-export interface HomeworkPuzzlePayload extends HomeworkStrikeStatus {
-  title: string;
+/** What a student receives to play one material (backend homeworkUtils.playContentOf): the same for homework and workbook. */
+export interface PuzzlePlayContent {
+  kind: MaterialKind;
+  /** One entry per position for a `choice`, `square` or illegal-position material (then `games`, `lines` and `prompts` are []); [] for a board material played from its PGN. */
+  questions: HomeworkQuestion[];
+  /** One entry per `games` entry: the question written in that position's PGN, or null. [] for a question material. */
+  prompts: Array<string | null>;
   games: string[];
+  /** One entry per `games` entry (D8). */
+  lines: HomeworkPuzzleLine[];
   totalPositions: number;
+  /** Name the move after each correct move. */
+  nameTheMove: boolean;
+  /** Positions are played on a free board and answered with one from-to move. */
+  allowIllegalPosition: boolean;
+  /** The material shows its PGN text (true for every `square` material). */
+  showPuzzleText: boolean;
+}
+
+/** GET /homework/:id/puzzle (homework.service.js getPuzzleContent); one success branch. */
+export interface HomeworkPuzzlePayload extends HomeworkStrikeStatus, PuzzlePlayContent {
+  title: string;
   timeLimit: number;
   maxAttempts: number;
   materialCollectionId: string;
@@ -204,21 +221,8 @@ export interface HomeworkPuzzlePayload extends HomeworkStrikeStatus {
   engineJudge: boolean;
   /** The collection's puzzle type (D5). `withOpponentMoves`: the student plays both sides of the main line; `withVariations`: `games` holds one standalone line per opponent variation (D1–D4). */
   puzzleType: PuzzleType;
-  /** One entry per `games` entry (D8). */
-  lines: HomeworkPuzzleLine[];
   /** True when the student's result no longer matches the live PGN; clients show "This homework has changed". */
   changed: boolean;
-  kind: MaterialKind;
-  /** One entry per position for a `choice`, `square` or illegal-position material (then `games`, `lines` and `prompts` are []); [] for a board material played from its PGN. */
-  questions: HomeworkQuestion[];
-  /** One entry per `games` entry: the question written in that position's PGN, or null (none written, a variation line, or the material's puzzle text is off). [] for a question material, whose prompts are in `questions`. */
-  prompts: Array<string | null>;
-  /** Name the move after each correct move (D1). */
-  nameTheMove: boolean;
-  /** Positions are played on a free board and answered with one from-to move (D3). */
-  allowIllegalPosition: boolean;
-  /** The material shows its PGN text: the question per position (`prompts`, or a click puzzle's `prompt`) and the explanation once a position is done (beginner-puzzle-kinds-web D6). True for every `square` material. */
-  showPuzzleText: boolean;
 }
 
 /** GET /homework/:id/lesson (homework.service.js getLessonContent). pgnContent and videoUrl may be "" for a video-only or PGN-only lesson. */
@@ -289,21 +293,27 @@ export interface CreateHomeworkResultInput {
 }
 
 interface SubmitHomeworkMoveBase { materialId: string; positionIndex: number; /** The attempt being answered, from `open`; makes a resend idempotent (D5). */ attemptNumber?: number }
+/** `moves` for a board position, `answer` for a choice question; exactly one. Shared by the homework and workbook move bodies. */
+export type PositionAnswerBody = { moves: string[]; answer?: never } | { answer: QuestionAnswer; moves?: never };
 /** Body of PUT /homework-result/:id/move. `moves` for a board position (one from-to move such as `d4c6` on an illegal-position material, and `[]` to abandon any position); `answer` for a `choice` question. Exactly one of the two; any other key is a 400. */
-export type SubmitHomeworkMoveInput = SubmitHomeworkMoveBase & ({ moves: string[]; answer?: never } | { answer: QuestionAnswer; moves?: never });
+export type SubmitHomeworkMoveInput = SubmitHomeworkMoveBase & PositionAnswerBody;
 
 /** Body of PUT /homework-result/:id/pick. */
 export interface SubmitHomeworkPickInput { materialId: string; positionIndex: number; pick: HomeworkPick }
 
-/** PUT /homework-result/:id/pick success body. `nextStep` is what the position asks for next ('square' while squares are left, a naming step while naming), null when there is nothing left to pick. */
-export interface SubmitHomeworkPickResult {
-  result: HomeworkResultRecord;
+/** The pick fields of a pick response (homework and workbook, backend positionResult.pickResponse). `nextStep` is what the position asks for next ('square' while squares are left, a naming step while naming), null when there is nothing left to pick. */
+export interface PickOutcomeFields {
   pickCorrect: boolean;
   picks: StoredPick[];
   nextStep: PickStep | null;
   positionDone: boolean;
   nextPositionIndex: number | null;
   reveal: QuestionReveal | null;
+}
+
+/** PUT /homework-result/:id/pick success body. */
+export interface SubmitHomeworkPickResult extends PickOutcomeFields {
+  result: HomeworkResultRecord;
 }
 
 /** Body of PUT /homework-result/:id/open and /workbook-result/:id/open: the server stamps the position start. */

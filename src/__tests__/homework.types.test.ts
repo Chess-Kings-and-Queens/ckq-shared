@@ -1,5 +1,5 @@
 import { HOMEWORK_CONFLICT_CODES, homeworkConflictCode, MATERIAL_KINDS, PICK_STEPS, PUZZLE_TYPES, PUZZLE_TYPE_RULES, PUZZLE_TYPE_STUDENT_NOTES, puzzleTypeRules, puzzleTypeStudentNote } from '../types/homework';
-import type { CreateHomeworkResultInput, HomeworkPositionAnswer, HomeworkPuzzleLine, HomeworkPuzzlePayload, HomeworkQuestion, HomeworkReport, HomeworkResultRecord, HomeworkRow, OpenPositionResult, PositionSubmissionOutcome, SubmitHomeworkMoveInput, SubmitHomeworkMoveResult, SubmitHomeworkPickInput, SubmitHomeworkPickResult } from '../types/homework';
+import type { CreateHomeworkResultInput, HomeworkPositionAnswer, HomeworkPuzzleLine, HomeworkPuzzlePayload, HomeworkQuestion, HomeworkReport, HomeworkResultRecord, HomeworkRow, OpenPositionResult, PositionAnswerBody, PositionSubmissionOutcome, PuzzlePlayContent, SubmitHomeworkMoveInput, SubmitHomeworkMoveResult, SubmitHomeworkPickInput, SubmitHomeworkPickResult } from '../types/homework';
 import type { SubmitWorkbookMoveInput } from '../types/workbook';
 
 describe('homeworkConflictCode', () => {
@@ -244,6 +244,73 @@ describe('web contract additions (beginner-puzzle-kinds-web)', () => {
     // @ts-expect-error kind is required
     const bad: HomeworkReport = withoutKind;
     expect(bad.student).toBe('s1');
+  });
+});
+
+describe('shared play content (workbook puzzle kinds)', () => {
+  const content: PuzzlePlayContent = {
+    kind: 'board',
+    questions: [],
+    prompts: [null],
+    games: ['1. e4 e5'],
+    lines: [{ game: 0, branchMove: null, branchFen: null, branchSan: null }],
+    totalPositions: 1,
+    nameTheMove: false,
+    allowIllegalPosition: false,
+    showPuzzleText: false,
+  };
+  test('a HomeworkPuzzlePayload is PuzzlePlayContent plus the homework fields', () => {
+    const payload: HomeworkPuzzlePayload = {
+      ...content,
+      title: 't',
+      timeLimit: 60,
+      maxAttempts: 3,
+      materialCollectionId: 'c1',
+      groupClassSessionId: null,
+      homeworkMaterialId: 'm1',
+      engineJudge: false,
+      puzzleType: 'regular',
+      changed: false,
+      activeViolations: 0,
+      rushViolationsToBlock: 3,
+      minThinkTimePct: 20,
+      isBlocked: false,
+      strikesLeft: 3,
+      rushThresholdSeconds: null,
+    };
+    const asContent: PuzzlePlayContent = payload;
+    expect(asContent.games).toEqual(['1. e4 e5']);
+  });
+  test('PuzzlePlayContent without questions is rejected by the compiler', () => {
+    const { questions, ...withoutQuestions } = content;
+    // @ts-expect-error questions is required
+    const bad: PuzzlePlayContent = withoutQuestions;
+    expect(questions).toEqual([]);
+    expect(bad.kind).toBe('board');
+  });
+  test('SubmitHomeworkPickResult requires result and the six pick fields', () => {
+    // @ts-expect-error result and the pick fields are required
+    const bad: SubmitHomeworkPickResult = {};
+    const full: SubmitHomeworkPickResult = {
+      result: { _id: 'r1', materialResults: [] },
+      pickCorrect: false,
+      picks: [],
+      nextStep: null,
+      positionDone: false,
+      nextPositionIndex: 0,
+      reveal: null,
+    };
+    expect(bad).toEqual({});
+    expect(full.nextPositionIndex).toBe(0);
+  });
+  test('PositionAnswerBody takes moves or answer, not both', () => {
+    const board: PositionAnswerBody = { moves: ['e4'] };
+    const question: PositionAnswerBody = { answer: { choiceId: 'a' } };
+    // @ts-expect-error exactly one of moves and answer
+    const bad: PositionAnswerBody = { moves: ['e4'], answer: { choiceId: 'a' } };
+    expect(board.moves).toEqual(['e4']);
+    expect(question.answer).toEqual({ choiceId: 'a' });
+    expect(bad.moves).toEqual(['e4']);
   });
 });
 
